@@ -14,6 +14,7 @@ import sys
 sys.path.append("..")
 from utils import losses
 from scipy.special import lambertw
+from scipy.sparse import find
 
 
 class TorchGraphInterface(object):
@@ -33,7 +34,7 @@ class GraphConv(nn.Module):
     Graph Convolutional Network
     """
     def __init__(self, n_hops, n_users, interact_mat,
-                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.1):
+                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.26):
         super(GraphConv, self).__init__()
         self.eps = eps
         self.interact_mat = interact_mat
@@ -100,7 +101,7 @@ class lgn_tau_cf_frame(nn.Module):
         self.n_users = data_config['n_users']
         self.n_items = data_config['n_items']
         self.adj_mat = adj_mat
-
+        #self.input = get_input_from_adjacency_matrix(self.adj_mat)
         self.decay = args_config.l2
         self.emb_size = args_config.dim
         self.context_hops = args_config.context_hops
@@ -167,6 +168,16 @@ class lgn_tau_cf_frame(nn.Module):
         i = torch.LongTensor([coo.row, coo.col])
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
+    
+    # def get_input_from_adjacency_matrix(adj_mat):
+    #     # 获取非零元素的索引
+    #     nonzero_indices = find(adj_mat)
+    #     # 将行索引和列索引分别保存为数组
+    #     user_indices = nonzero_indices[1]
+    #     item_indices = nonzero_indices[0]
+    #     # 构造输入数组，其中每个元素是一个包含用户索引和物品索引的元组
+    #     inputs = torch.tensor([user_indices, item_indices])
+    #     return inputs
 
     def _update_tau_memory(self, x):
         # x: std [B]
@@ -216,8 +227,9 @@ class lgn_tau_cf_frame(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
     
-    def reg_data_handler(self, user_embed, item_embed):
+    def reg_data_handler(self, user_embed, item_embed, user, item):
         #print(user_embed.shape)
+        #print(item_embed.shape)
         u_online = user_embed
         i_online = item_embed
         with torch.no_grad():
@@ -226,34 +238,43 @@ class lgn_tau_cf_frame(nn.Module):
             #print(u_target.shape)
             x = self.sparse_dropout(self.sparse_norm_adj)
             all_embeddings = torch.cat([u_target, i_target], 0)
+            
+            all_embeddings = all_embeddings.view(-1, all_embeddings.size(0))  # Reshape to [n_users + n_items, emb_size]
             #print(x.shape)
             #print(all_embeddings.shape)
-            all_embeddings = torch.cat([u_target, i_target], 0)
-            all_embeddings = all_embeddings.view(-1, all_embeddings.size(1))  # Reshape to [n_users + n_items, emb_size]
-            #print(x.shape)
-            #print(all_embeddings.shape)
+            all_embeddings = torch.transpose(all_embeddings, 0, 1)
             all_embeddings = torch.sparse.mm(x, all_embeddings)  # Transpose and perform sparse matrix multiplication
-            u_target = all_embeddings[:self.user_count, :]
-            i_target = all_embeddings[self.user_count:, :]
-            u_target = u_target[inputs[0], :]
-            i_target = i_target[inputs[1], :]
+            u_target = all_embeddings[:self.n_users, :]
+            i_target = all_embeddings[self.n_users:, :]
+            
+#             #print(u_target.shape)
+#             #print(i_target.shape)
+            u_target = u_target[user, :]
+            i_target = i_target[item, :]
 
-        u_online = u_online[inputs[0], :]
-        i_online = i_online[inputs[1], :]
+        u_online = u_online[user, :]
+        i_online = i_online[item, :]
         return u_online, u_target, i_online, i_target
     
-    def loss_fn(self, p, z):  # negative cosine similarity
+    def loss_cf(self, p, z):  # negative cosine similarity
+        p = p.view(-1, p.size(0))
+        p = torch.transpose(p, 0, 1)
+        #print(p.shape)
+        #print(z.shape)
+        # print(p.t().shape)
+        # print(z.detach().shape)
+
         return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
     
     def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
-        reg_loss = self.reg_loss(u_online, i_online)
+        #reg_loss = self.reg_loss(u_online, i_online)
 
         u_online_1, i_online_1 = self.predictor(u_online), self.predictor(i_online)
 
-        loss_ui = self.loss_fn(u_online_1, i_target)/2
-        loss_iu = self.loss_fn(i_online_1, u_target)/2
+        loss_ui = self.loss_cf(u_online_1, u_target)/2
+        loss_iu = self.loss_cf(i_online_1, i_target)/2
 
-        return loss_ui + loss_iu + 0.01 * reg_loss
+        return loss_ui + loss_iu 
     
     def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
         user = batch['users']
@@ -265,7 +286,11 @@ class lgn_tau_cf_frame(nn.Module):
                                               perturb=False)
         #print(user_gcn_emb.shape)
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
-        u_online, u_target, i_online, i_target = self.reg_data_handler(user_gcn_emb, item_gcn_emb)
+        u_online, u_target, i_online, i_target = self.reg_data_handler(user_gcn_emb, item_gcn_emb, user, pos_item)
+        #print(u_online.shape)
+        #print(u_target.shape)
+        #print(i_online.shape)
+        #print(i_target.shape)
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)
@@ -386,11 +411,11 @@ class lgn_tau_cf_frame(nn.Module):
         #print(user_view_1)
         #print(user_view_2)
         #print(self.memory_tau)
-        temperature = self.memory_tau.mean()
-        print(temperature)
-        user_cl_loss = self.InfoNCE(user_view_1[u_idx], user_view_2[u_idx], temperature/2)
+        #temperature = self.memory_tau.mean()
+        #print(temperature)
+        user_cl_loss = self.InfoNCE(user_view_1[u_idx], user_view_2[u_idx], self.temperature)
         #print(user_cl_loss)
-        item_cl_loss = self.InfoNCE(item_view_1[i_idx], item_view_2[i_idx], temperature/2)
+        item_cl_loss = self.InfoNCE(item_view_1[i_idx], item_view_2[i_idx], self.temperature)
         return user_cl_loss + item_cl_loss
 
     # 对比训练loss，仅仅计算角度
@@ -420,10 +445,10 @@ class lgn_tau_cf_frame(nn.Module):
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, tau, nce_loss
+            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, tau, nce_loss + cf_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, y_pred, nce_loss
+            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, y_pred, nce_loss + cf_loss
         else:
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 
@@ -449,17 +474,17 @@ class lgn_tau_cf_frame(nn.Module):
         emb_loss = self.decay * regularize / batch_size
 
         nce_loss = self.lamda * self.cal_cl_loss([u_e, pos_e])#######################计算loss
-        cf_loss = self.calculate_cf_loss(u_online, u_target, i_online, i_target)
+        cf_loss = 2 * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
         #print("No_Sample")
         #print(nce_loss)
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, tau, nce_loss
+            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, tau, nce_loss + cf_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, y_pred, nce_loss
+            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, y_pred, nce_loss + cf_loss
         else:
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 

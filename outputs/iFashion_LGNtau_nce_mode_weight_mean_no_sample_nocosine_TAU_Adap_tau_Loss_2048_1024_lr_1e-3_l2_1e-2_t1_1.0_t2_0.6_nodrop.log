@@ -1,0 +1,25 @@
+2024-03-31 11:52:24,084 - [INFO] - {'dataset': 'iFashion', 'data_path': './data/', 'name': 'iFashion_LGNtau_nce_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-2_t1_1.0_t2_0.6_nodrop_31_03_2024_11:52:24', 'train_ratio': 0.8, 'gnn': 'lgntau', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 0.01, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-03-31 11:52:33,902 - [INFO] - load train.txt
+2024-03-31 11:52:52,130 - [INFO] - building the adj mat ...
+2024-03-31 11:52:53,065 - [INFO] - train set len is 1255447
+2024-03-31 11:52:53,065 - [INFO] - test set len is 352366
+2024-03-31 11:52:53,065 - [INFO] - loading over ...
+2024-03-31 11:52:53,065 - [INFO] - users are 300000 items are 81614
+Adap_tau_Loss
+start to make tables
+2024-03-31 11:53:06,564 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-03-31 11:53:06,565 - [INFO] - start training ...
+8.855723661219901
+2024-03-31 11:53:06,655 - [INFO] - current w_0 is 12.651033554078595
+2024-03-31 12:01:49,797 - [INFO] - E:0|TAU:12.65 12.65, train_time: 506.7, VALID_time: 16.43, loss: 2.171e+03, emb_loss:0.000939, nce_loss:0.001235, best_valid(recall@20): -inf
+valid 	 N@5: 0.02664, R@5: 0.03856, P@5: 0.009488
+valid 	 N@10: 0.03354, R@10: 0.05918, P@10: 0.007365
+valid 	 N@15: 0.03774, R@15: 0.07427, P@15: 0.006204
+valid 	 N@20: 0.04088, R@20: 0.0869, P@20: 0.005462
+valid 	 N@25: 0.04336, R@25: 0.09766, P@25: 0.004927
+valid 	 N@30: 0.04542, R@30: 0.1071, P@30: 0.004521
+valid 	 N@40: 0.04879, R@40: 0.1235, P@40: 0.00393
+valid 	 N@50: 0.05149, R@50: 0.1376, P@50: 0.00351
+
+8.855723661219901
+2024-03-31 12:01:50,118 - [INFO] - current w_0 is 12.651033554078595

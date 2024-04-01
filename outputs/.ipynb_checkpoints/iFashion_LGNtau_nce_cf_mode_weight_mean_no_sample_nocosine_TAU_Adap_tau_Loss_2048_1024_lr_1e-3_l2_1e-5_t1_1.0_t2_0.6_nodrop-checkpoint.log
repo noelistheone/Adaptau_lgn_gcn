@@ -1,0 +1,15 @@
+2024-03-28 12:21:23,828 - [INFO] - {'dataset': 'iFashion', 'data_path': './data/', 'name': 'iFashion_LGNtau_nce_cf_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_1.0_t2_0.6_nodrop_28_03_2024_12:21:23', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-03-28 12:21:34,948 - [INFO] - load train.txt
+2024-03-28 12:21:50,497 - [INFO] - building the adj mat ...
+2024-03-28 12:21:51,439 - [INFO] - train set len is 1255447
+2024-03-28 12:21:51,440 - [INFO] - test set len is 352366
+2024-03-28 12:21:51,440 - [INFO] - loading over ...
+2024-03-28 12:21:51,440 - [INFO] - users are 300000 items are 81614
+Adap_tau_Loss
+start to make tables
+2024-03-28 12:22:09,686 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-03-28 12:22:09,686 - [INFO] - start training ...
+8.855723661219901
+2024-03-28 12:22:09,774 - [INFO] - current w_0 is 12.651033554078595
+torch.Size([381614, 381614])
+torch.Size([24423296, 4])

@@ -32,7 +32,7 @@ class GraphConv(nn.Module):
     Graph Convolutional Network
     """
     def __init__(self, n_hops, n_users, interact_mat,
-                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.15):
+                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.26):
         super(GraphConv, self).__init__()
         self.eps = eps
         self.interact_mat = interact_mat
@@ -329,11 +329,11 @@ class lgn_tau_frame(nn.Module):
         #print(user_view_1)
         #print(user_view_2)
         #print(self.memory_tau)
-        temperature = self.memory_tau.mean()
-        print(temperature)
-        user_cl_loss = self.InfoNCE(user_view_1[u_idx], user_view_2[u_idx], temperature/6)
+        #temperature = self.memory_tau.mean()
+        #print(temperature)
+        user_cl_loss = self.InfoNCE(user_view_1[u_idx], user_view_2[u_idx], self.temperature)
         #print(user_cl_loss)
-        item_cl_loss = self.InfoNCE(item_view_1[i_idx], item_view_2[i_idx], temperature/6)
+        item_cl_loss = self.InfoNCE(item_view_1[i_idx], item_view_2[i_idx], self.temperature)
         return user_cl_loss + item_cl_loss
 
     # 对比训练loss，仅仅计算角度
