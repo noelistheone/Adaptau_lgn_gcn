@@ -473,7 +473,7 @@ class lgn_tau_cf_frame(nn.Module):
                        + torch.norm(pos_gcn_emb[:, :]) ** 2) / 2  # take hop=0
         emb_loss = self.decay * regularize / batch_size
 
-        nce_loss = self.lamda * self.cal_cl_loss([u_e, pos_e])#######################计算loss
+        #nce_loss = self.lamda * self.cal_cl_loss([u_e, pos_e])#######################计算loss
         cf_loss = 2 * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
         #print("No_Sample")
         #print(nce_loss)
@@ -481,10 +481,10 @@ class lgn_tau_cf_frame(nn.Module):
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, tau, nce_loss + cf_loss
+            return loss.mean() + emb_loss + cf_loss, loss_, emb_loss, tau, cf_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
-            return loss.mean() + emb_loss + nce_loss + cf_loss, loss_, emb_loss, y_pred, nce_loss + cf_loss
+            return loss.mean() + emb_loss + cf_loss, loss_, emb_loss, y_pred, cf_loss
         else:
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 
