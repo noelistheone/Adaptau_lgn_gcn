@@ -34,7 +34,7 @@ class GraphConv(nn.Module):
     Graph Convolutional Network
     """
     def __init__(self, n_hops, n_users, interact_mat,
-                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.26):
+                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.05):
         super(GraphConv, self).__init__()
         self.eps = eps
         self.interact_mat = interact_mat
@@ -234,6 +234,11 @@ class lgn_tau_cf_frame(nn.Module):
         i_online = item_embed
         with torch.no_grad():
             u_target, i_target = u_online.clone(), i_online.clone()
+            u_target, i_target = self.gcn(self.user_embed,
+                                          self.item_embed,
+                                          edge_dropout=False,
+                                          mess_dropout=False,
+                                          perturb=True)
             # edge pruning
             #print(u_target.shape)
             x = self.sparse_dropout(self.sparse_norm_adj)
@@ -270,11 +275,13 @@ class lgn_tau_cf_frame(nn.Module):
         #reg_loss = self.reg_loss(u_online, i_online)
 
         u_online_1, i_online_1 = self.predictor(u_online), self.predictor(i_online)
+        
+        loss_ui = self.loss_cf(u_online_1, i_target)/2
+        loss_iu = self.loss_cf(i_online_1, u_target)/2
+        # loss_uu = self.loss_cf(u_online_1, u_target)/4
+        # loss_ii = self.loss_cf(i_online_1, i_target)/4
 
-        loss_ui = self.loss_cf(u_online_1, u_target)/2
-        loss_iu = self.loss_cf(i_online_1, i_target)/2
-
-        return loss_ui + loss_iu 
+        return loss_ui + loss_iu
     
     def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
         user = batch['users']
@@ -474,7 +481,7 @@ class lgn_tau_cf_frame(nn.Module):
         emb_loss = self.decay * regularize / batch_size
 
         #nce_loss = self.lamda * self.cal_cl_loss([u_e, pos_e])#######################计算loss
-        cf_loss = 2 * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
+        cf_loss = 10 * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
         #print("No_Sample")
         #print(nce_loss)
         if self.loss_name == "Adap_tau_Loss":
