@@ -227,18 +227,23 @@ class lgn_tau_cf_frame(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
     
-    def reg_data_handler(self, user_embed, item_embed, user, item):
+    def reg_data_handler(self, user, item):
         #print(user_embed.shape)
         #print(item_embed.shape)
-        u_online = user_embed
-        i_online = item_embed
+        # u_online = user_embed
+        # i_online = item_embed
+        u_online, i_online = self.gcn(self.user_embed,
+                                     self.item_embed,
+                                     edge_dropout=self.edge_dropout,
+                                     mess_dropout=self.mess_dropout,
+                                     perturb=True)
         with torch.no_grad():
             u_target, i_target = u_online.clone(), i_online.clone()
-            u_target, i_target = self.gcn(self.user_embed,
-                                          self.item_embed,
-                                          edge_dropout=False,
-                                          mess_dropout=False,
-                                          perturb=True)
+            # u_target, i_target = self.gcn(self.user_embed,
+            #                               self.item_embed,
+            #                               edge_dropout=False,
+            #                               mess_dropout=False,
+            #                               perturb=True)
             # edge pruning
             #print(u_target.shape)
             x = self.sparse_dropout(self.sparse_norm_adj)
@@ -293,7 +298,7 @@ class lgn_tau_cf_frame(nn.Module):
                                               perturb=False)
         #print(user_gcn_emb.shape)
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
-        u_online, u_target, i_online, i_target = self.reg_data_handler(user_gcn_emb, item_gcn_emb, user, pos_item)
+        u_online, u_target, i_online, i_target = self.reg_data_handler(user, pos_item)
         #print(u_online.shape)
         #print(u_target.shape)
         #print(i_online.shape)
