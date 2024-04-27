@@ -28,9 +28,6 @@ then
 elif [[ $gnn = "lgn" ]]
 then
         gnn_name="LGN"
-elif [[ $gnn = "lgntau" ]]
-then
-        gnn_name="LGNtau_nce"
 else
         echo "NO loss"
         exit 1

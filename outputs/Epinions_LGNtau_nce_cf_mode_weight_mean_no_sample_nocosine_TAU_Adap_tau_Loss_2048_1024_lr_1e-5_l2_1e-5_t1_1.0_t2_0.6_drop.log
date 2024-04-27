@@ -1,0 +1,25 @@
+2024-04-25 16:44:44,913 - [INFO] - {'dataset': 'Epinions', 'data_path': './data/', 'name': 'Epinions_LGNtau_nce_cf_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-5_l2_1e-5_t1_1.0_t2_0.6_drop_25_04_2024_16:44:44', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 1e-05, 'mess_dropout': True, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-04-25 16:44:48,400 - [INFO] - load train.txt
+2024-04-25 16:44:52,894 - [INFO] - building the adj mat ...
+2024-04-25 16:44:53,211 - [INFO] - train set len is 356185
+2024-04-25 16:44:53,211 - [INFO] - test set len is 152652
+2024-04-25 16:44:53,211 - [INFO] - loading over ...
+2024-04-25 16:44:53,211 - [INFO] - users are 75888 items are 75882
+Adap_tau_Loss
+start to make tables
+2024-04-25 16:45:10,222 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-04-25 16:45:10,222 - [INFO] - start training ...
+8.59217033394023
+2024-04-25 16:45:10,258 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 16:45:59,838 - [INFO] - E:0|TAU:12.27 12.27, train_time: 47.66, VALID_time: 1.915, loss: 1.199e+03, emb_loss:2.122e-08, nce_loss:-0.006991, best_valid(recall@20): -inf
+valid 	 N@5: 0.0001228, R@5: 0.0002075, P@5: 6.112e-05
+valid 	 N@10: 0.0001746, R@10: 0.0003525, P@10: 5.5e-05
+valid 	 N@15: 0.000229, R@15: 0.0005587, P@15: 5.297e-05
+valid 	 N@20: 0.000257, R@20: 0.0006629, P@20: 5.042e-05
+valid 	 N@25: 0.0002874, R@25: 0.0007951, P@25: 4.889e-05
+valid 	 N@30: 0.0003323, R@30: 0.0009955, P@30: 5.195e-05
+valid 	 N@40: 0.0003759, R@40: 0.001197, P@40: 4.813e-05
+valid 	 N@50: 0.0004322, R@50: 0.001479, P@50: 4.767e-05
+
+8.59217033394023
+2024-04-25 16:45:59,944 - [INFO] - current w_0 is 12.274529170852588

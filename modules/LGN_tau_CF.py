@@ -34,7 +34,7 @@ class GraphConv(nn.Module):
     Graph Convolutional Network
     """
     def __init__(self, n_hops, n_users, interact_mat,
-                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.1):
+                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.08):
         super(GraphConv, self).__init__()
         self.eps = eps
         self.interact_mat = interact_mat

@@ -1,0 +1,61 @@
+2024-04-25 16:46:53,239 - [INFO] - {'dataset': 'Epinions', 'data_path': './data/', 'name': 'Epinions_LGNtau_nce_cf_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-4_t1_1.0_t2_0.6_drop_25_04_2024_16:46:53', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 0.0001, 'lr': 0.001, 'mess_dropout': True, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-04-25 16:46:55,895 - [INFO] - load train.txt
+2024-04-25 16:46:59,412 - [INFO] - building the adj mat ...
+2024-04-25 16:46:59,652 - [INFO] - train set len is 356185
+2024-04-25 16:46:59,652 - [INFO] - test set len is 152652
+2024-04-25 16:46:59,652 - [INFO] - loading over ...
+2024-04-25 16:46:59,652 - [INFO] - users are 75888 items are 75882
+Adap_tau_Loss
+start to make tables
+2024-04-25 16:47:10,119 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-04-25 16:47:10,119 - [INFO] - start training ...
+8.59217033394023
+2024-04-25 16:47:10,147 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 16:47:48,184 - [INFO] - E:0|TAU:12.27 12.27, train_time: 36.09, VALID_time: 1.945, loss: 801.7, emb_loss:2.293e-06, nce_loss:0.005851, best_valid(recall@20): -inf
+valid 	 N@5: 0.05061, R@5: 0.04649, P@5: 0.03314
+valid 	 N@10: 0.05658, R@10: 0.06828, P@10: 0.02719
+valid 	 N@15: 0.06078, R@15: 0.08301, P@15: 0.02377
+valid 	 N@20: 0.06393, R@20: 0.0943, P@20: 0.02123
+valid 	 N@25: 0.0665, R@25: 0.1033, P@25: 0.01935
+valid 	 N@30: 0.06865, R@30: 0.1108, P@30: 0.01783
+valid 	 N@40: 0.07224, R@40: 0.1232, P@40: 0.01565
+valid 	 N@50: 0.07505, R@50: 0.1328, P@50: 0.01407
+
+8.59217033394023
+2024-04-25 16:47:48,294 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 16:48:37,951 - [INFO] - E:1|TAU:3.307 4.104, train_time: 47.64, VALID_time: 2.014, loss: -175.5, emb_loss:9.946e-06, nce_loss:-0.8103, best_valid(recall@20): 0.0943
+valid 	 N@5: 0.03897, R@5: 0.03222, P@5: 0.02571
+valid 	 N@10: 0.04148, R@10: 0.04755, P@10: 0.01976
+valid 	 N@15: 0.0443, R@15: 0.05935, P@15: 0.01718
+valid 	 N@20: 0.04665, R@20: 0.06872, P@20: 0.0154
+valid 	 N@25: 0.04856, R@25: 0.07612, P@25: 0.01409
+valid 	 N@30: 0.05067, R@30: 0.08424, P@30: 0.0132
+valid 	 N@40: 0.05385, R@40: 0.09635, P@40: 0.0117
+valid 	 N@50: 0.05662, R@50: 0.1069, P@50: 0.01069
+
+8.59217033394023
+2024-04-25 16:48:37,972 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 16:49:28,099 - [INFO] - E:2|TAU:3.332 4.565, train_time: 48.28, VALID_time: 1.842, loss: -481.9, emb_loss:1.825e-05, nce_loss:-1.751, best_valid(recall@20): 0.0943
+valid 	 N@5: 0.03637, R@5: 0.02961, P@5: 0.02374
+valid 	 N@10: 0.03859, R@10: 0.0435, P@10: 0.01839
+valid 	 N@15: 0.04095, R@15: 0.05397, P@15: 0.01586
+valid 	 N@20: 0.04305, R@20: 0.06248, P@20: 0.0142
+valid 	 N@25: 0.04486, R@25: 0.06968, P@25: 0.01297
+valid 	 N@30: 0.0466, R@30: 0.0762, P@30: 0.01214
+valid 	 N@40: 0.04965, R@40: 0.088, P@40: 0.01082
+valid 	 N@50: 0.05223, R@50: 0.09788, P@50: 0.009899
+
+8.59217033394023
+2024-04-25 16:49:28,116 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 16:50:18,184 - [INFO] - E:3|TAU:3.37 4.942, train_time: 48.15, VALID_time: 1.912, loss: -526.9, emb_loss:2.215e-05, nce_loss:-1.888, best_valid(recall@20): 0.0943
+valid 	 N@5: 0.03529, R@5: 0.02847, P@5: 0.02308
+valid 	 N@10: 0.03749, R@10: 0.04229, P@10: 0.01788
+valid 	 N@15: 0.03979, R@15: 0.05245, P@15: 0.01546
+valid 	 N@20: 0.04172, R@20: 0.06044, P@20: 0.01378
+valid 	 N@25: 0.04356, R@25: 0.06787, P@25: 0.01257
+valid 	 N@30: 0.04512, R@30: 0.0737, P@30: 0.01174
+valid 	 N@40: 0.04827, R@40: 0.08584, P@40: 0.01054
+valid 	 N@50: 0.05093, R@50: 0.09609, P@50: 0.009686
+
+8.59217033394023
+2024-04-25 16:50:18,215 - [INFO] - current w_0 is 12.274529170852588

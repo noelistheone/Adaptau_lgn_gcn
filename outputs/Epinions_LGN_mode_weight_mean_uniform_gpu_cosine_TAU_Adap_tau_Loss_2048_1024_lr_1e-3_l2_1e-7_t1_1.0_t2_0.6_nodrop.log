@@ -1,0 +1,37 @@
+2024-04-25 19:57:27,776 - [INFO] - {'dataset': 'Epinions', 'data_path': './data/', 'name': 'Epinions_LGN_mode_weight_mean_uniform_gpu_cosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-7_t1_1.0_t2_0.6_nodrop_25_04_2024_19:57:27', 'train_ratio': 0.8, 'gnn': 'lgn', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-07, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'uniform_gpu', 'generate_mode': 'cosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-04-25 19:57:30,526 - [INFO] - load train.txt
+2024-04-25 19:57:34,233 - [INFO] - building the adj mat ...
+2024-04-25 19:57:34,584 - [INFO] - train set len is 356185
+2024-04-25 19:57:34,585 - [INFO] - test set len is 152652
+2024-04-25 19:57:34,585 - [INFO] - loading over ...
+2024-04-25 19:57:34,585 - [INFO] - users are 75888 items are 75882
+Adap_tau_Loss
+start to make tables
+2024-04-25 19:57:45,621 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-04-25 19:57:45,621 - [INFO] - start training ...
+8.59217033394023
+2024-04-25 19:57:45,645 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 19:58:29,591 - [INFO] - E:0|TAU:12.27 12.27, train_time: 42.63, VALID_time: 1.31, loss: 369.1, emb_loss:5.277e-07, nce_loss:0.0, best_valid(recall@20): -inf
+valid 	 N@5: 0.07396, R@5: 0.06396, P@5: 0.05321
+valid 	 N@10: 0.08067, R@10: 0.09271, P@10: 0.04332
+valid 	 N@15: 0.08453, R@15: 0.1095, P@15: 0.03674
+valid 	 N@20: 0.08783, R@20: 0.1227, P@20: 0.03235
+valid 	 N@25: 0.09035, R@25: 0.1324, P@25: 0.02901
+valid 	 N@30: 0.09263, R@30: 0.1406, P@30: 0.02648
+valid 	 N@40: 0.09624, R@40: 0.1537, P@40: 0.02261
+valid 	 N@50: 0.09923, R@50: 0.1639, P@50: 0.01997
+
+8.59217033394023
+2024-04-25 19:58:29,700 - [INFO] - current w_0 is 12.274529170852588
+2024-04-25 19:59:13,659 - [INFO] - E:1|TAU:3.545 4.288, train_time: 42.6, VALID_time: 1.358, loss: -439.0, emb_loss:1.057e-06, nce_loss:0.0, best_valid(recall@20): 0.1227
+valid 	 N@5: 0.06832, R@5: 0.05942, P@5: 0.04784
+valid 	 N@10: 0.07339, R@10: 0.08355, P@10: 0.0377
+valid 	 N@15: 0.07691, R@15: 0.09873, P@15: 0.03194
+valid 	 N@20: 0.07955, R@20: 0.1094, P@20: 0.02797
+valid 	 N@25: 0.08196, R@25: 0.1187, P@25: 0.0251
+valid 	 N@30: 0.08382, R@30: 0.1254, P@30: 0.02285
+valid 	 N@40: 0.08727, R@40: 0.1378, P@40: 0.01966
+valid 	 N@50: 0.0901, R@50: 0.148, P@50: 0.01738
+
+8.59217033394023
+2024-04-25 19:59:13,681 - [INFO] - current w_0 is 12.274529170852588

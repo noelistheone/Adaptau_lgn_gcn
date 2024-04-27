@@ -1,0 +1,7 @@
+2024-04-25 19:58:10,413 - [INFO] - {'dataset': 'Epinions', 'data_path': './data/', 'name': 'Epinions_LGNtau_nce_cf_mode_weight_mean_uniform_gpu_cosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-7_t1_1.0_t2_0.6_nodrop_25_04_2024_19:58:10', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-07, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'uniform_gpu', 'generate_mode': 'cosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-04-25 19:58:13,270 - [INFO] - load train.txt
+2024-04-25 19:58:16,984 - [INFO] - building the adj mat ...
+2024-04-25 19:58:17,223 - [INFO] - train set len is 356185
+2024-04-25 19:58:17,223 - [INFO] - test set len is 152652
+2024-04-25 19:58:17,223 - [INFO] - loading over ...
+2024-04-25 19:58:17,223 - [INFO] - users are 75888 items are 75882

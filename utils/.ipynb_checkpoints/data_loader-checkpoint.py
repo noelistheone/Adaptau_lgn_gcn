@@ -38,6 +38,10 @@ def read_cf_amazon_1(file_name):
     #inter_mat = inter_mat - 1
     return inter_mat
 
+def read_cf_Epinions(file_name):
+    inter_mat = np.loadtxt(file_name, dtype=np.int32)  # [u_id, i_id]  
+    return inter_mat
+
 def read_cf_yelp2018(file_name):
     inter_mat = list()
     lines = open(file_name, "r").readlines()
@@ -179,6 +183,8 @@ def load_data(model_args, logger):
         read_cf = read_cf_amazon_1
     elif dataset == "amazon-beauty":
         read_cf = read_cf_yelp2018_1
+    elif dataset == "Epinions" or dataset == "last-fm":
+        read_cf = read_cf_Epinions
     else:
         read_cf = read_cf_amazon
 
@@ -186,7 +192,7 @@ def load_data(model_args, logger):
     train_cf = read_cf(directory + 'train.txt')
     logger.info("load train.txt")
     test_cf = read_cf(directory + 'test.txt')
-    if dataset == 'yelp2018' or dataset == "amazon-book" or dataset == "gowalla" or dataset == 'ml-1M' or dataset == "citeulike-new" or dataset == "douban-book" or dataset == "amazon-beauty" or dataset == "amazon-kindle" or dataset == "iFashion":
+    if dataset == 'yelp2018' or dataset == "amazon-book" or dataset == "gowalla" or dataset == 'ml-1M' or dataset == "citeulike-new" or dataset == "douban-book" or dataset == "amazon-beauty" or dataset == "amazon-kindle" or dataset == "iFashion" or dataset == "Epinions" or dataset == "last-fm":
         valid_cf = test_cf
     else:
         valid_cf = read_cf(directory + 'valid.txt')
