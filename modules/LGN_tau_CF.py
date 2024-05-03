@@ -34,7 +34,7 @@ class GraphConv(nn.Module):
     Graph Convolutional Network
     """
     def __init__(self, n_hops, n_users, interact_mat,
-                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.08):
+                 edge_dropout_rate=0.5, mess_dropout_rate=0.1, eps=0.1):
         super(GraphConv, self).__init__()
         self.eps = eps
         self.interact_mat = interact_mat
@@ -148,7 +148,7 @@ class lgn_tau_cf_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         self.reg_loss = losses.L2Loss()
-        self.lamda = 1e-3#########################################################超参数定义
+        self.lamda = 50#########################################################超参数定义
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -234,8 +234,8 @@ class lgn_tau_cf_frame(nn.Module):
         # i_online = item_embed
         u_online, i_online = self.gcn(self.user_embed,
                                      self.item_embed,
-                                     edge_dropout=self.edge_dropout,
-                                     mess_dropout=self.mess_dropout,
+                                     edge_dropout=True,
+                                     mess_dropout=False,
                                      perturb=True)
         with torch.no_grad():
             u_target, i_target = u_online.clone(), i_online.clone()
@@ -253,6 +253,8 @@ class lgn_tau_cf_frame(nn.Module):
             #print(x.shape)
             #print(all_embeddings.shape)
             all_embeddings = torch.transpose(all_embeddings, 0, 1)
+            # random_noise = torch.rand_like(all_embeddings).cuda()
+            # all_embeddings += torch.sign(all_embeddings) * F.normalize(random_noise, dim=-1) * 0.1
             all_embeddings = torch.sparse.mm(x, all_embeddings)  # Transpose and perform sparse matrix multiplication
             u_target = all_embeddings[:self.n_users, :]
             i_target = all_embeddings[self.n_users:, :]
@@ -486,7 +488,7 @@ class lgn_tau_cf_frame(nn.Module):
         emb_loss = self.decay * regularize / batch_size
 
         #nce_loss = self.lamda * self.cal_cl_loss([u_e, pos_e])#######################计算loss
-        cf_loss = 10 * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
+        cf_loss = self.lamda * self.calculate_cf_loss(u_online, u_target, i_online, i_target)
         #print("No_Sample")
         #print(nce_loss)
         if self.loss_name == "Adap_tau_Loss":

@@ -57,7 +57,3 @@ else
                 --temperature $t_1 --temperature_2 $t_2 --cnt_lr $cnt --context_hops $context_hops\
                 > ./outputs/${name1}.log
 fi
-
-
-
-

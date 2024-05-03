@@ -195,6 +195,7 @@ if __name__ == '__main__':
     from modules.LGN import lgn_frame
     #from modules.LGN_tau import lgn_tau_frame
     from modules.LGN_tau_CF import lgn_tau_cf_frame
+    from modules.LGN_tau_CFed import lgn_tau_cfed_frame
     #from modules.MF import MF
     #from modules.MF_tau import MF_tau
     if args.gnn == 'lgn':
@@ -203,6 +204,8 @@ if __name__ == '__main__':
         model = lgn_tau_frame(n_params, args, norm_mat, logger).to(device)
     elif args.gnn == "lgntaucf":
         model = lgn_tau_cf_frame(n_params, args, norm_mat, logger).to(device)
+    elif args.gnn == "lgncfed":
+        model = lgn_tau_cfed_frame(n_params, args, norm_mat, logger).to(device)
     else:
         raise NotImplementedError
     """define optimizer"""
