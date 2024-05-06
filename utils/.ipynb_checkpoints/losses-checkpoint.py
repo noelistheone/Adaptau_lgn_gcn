@@ -50,7 +50,7 @@ class SSM_Loss(nn.Module):
 
         loss = (- torch.log(pos_logits / Ng))
         
-        return loss, 0.
+        return loss, np.array([0.0])
     
 class L2Loss(nn.Module):
     def __init__(self):

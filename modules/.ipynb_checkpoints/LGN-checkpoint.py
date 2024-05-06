@@ -105,7 +105,9 @@ class lgn_frame(nn.Module):
         self.item_embed = nn.Parameter(self.item_embed)
        
         self.loss_name = args_config.loss_fn
-    
+        self._margin = 0
+        self._negativa_weight = None
+        self.pos_mode = None
         self.generate_mode = args_config.generate_mode
 
         if args_config.loss_fn == "Adap_tau_Loss":
@@ -115,7 +117,7 @@ class lgn_frame(nn.Module):
             self.loss_fn = losses.Adap_tau_Loss()
         elif args_config.loss_fn == "SSM_Loss":
             print(self.loss_name)
-            self.loss_fn = losses.SSM_Loss(self._margin, self.temperature, self._negativa_weight, args_config.pos_mode)
+            self.loss_fn = losses.SSM_Loss(self._margin, self.temperature, self._negativa_weight, self.pos_mode)
         else:
             raise NotImplementedError("loss={} is not support".format(args_config.loss_fn))
         

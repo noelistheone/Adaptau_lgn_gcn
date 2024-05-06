@@ -193,9 +193,9 @@ if __name__ == '__main__':
     train_cf = torch.LongTensor(np.array([[cf[0], cf[1]] for cf in train_cf], np.int32))
     """define model"""
     from modules.LGN import lgn_frame
-    #from modules.LGN_tau import lgn_tau_frame
+    from modules.LGN_tau import lgn_tau_frame
     from modules.LGN_tau_CF import lgn_tau_cf_frame
-    from modules.LGN_tau_CFed import lgn_tau_cfed_frame
+    #from modules.LGN_tau_CFed import lgn_tau_cfed_frame
     #from modules.MF import MF
     #from modules.MF_tau import MF_tau
     if args.gnn == 'lgn':

@@ -1,0 +1,13 @@
+2024-05-06 17:02:35,229 - [INFO] - {'dataset': 'amazon-beauty', 'data_path': './data/', 'name': 'amazon-beauty_LGN_mode_weight_v0_no_sample_nocosine_TAU_SSM_Loss_2048_1024_lr_1e-4_l2_1e-5_t1_1.0_t2_0.6_nodrop_06_05_2024_17:02:35', 'train_ratio': 0.8, 'gnn': 'lgn', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.0001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'SSM_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_v0', 'cnt_lr': 100}
+2024-05-06 17:02:35,690 - [INFO] - load train.txt
+2024-05-06 17:02:36,913 - [INFO] - building the adj mat ...
+2024-05-06 17:02:37,032 - [INFO] - train set len is 176139
+2024-05-06 17:02:37,032 - [INFO] - test set len is 22363
+2024-05-06 17:02:37,032 - [INFO] - loading over ...
+2024-05-06 17:02:37,032 - [INFO] - users are 22363 items are 12101
+SSM_Loss
+Here is SSM LOSS: tau is 1.0
+2024-05-06 17:02:44,063 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-05-06 17:02:44,063 - [INFO] - start training ...
+6.435490250430879
+2024-05-06 17:02:44,079 - [INFO] - current w_0 is 9.193557026776489

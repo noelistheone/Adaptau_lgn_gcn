@@ -69,7 +69,7 @@ class GraphConv(nn.Module):
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
         return embs[:self.n_users, :], embs[self.n_users:, :]
 
-class lgn_frame(nn.Module):
+class lgn_tau_frame(nn.Module):
     def __init__(self, data_config, args_config, adj_mat, logger=None):
         super(lgn_frame, self).__init__()
 
