@@ -1,0 +1,15 @@
+2024-05-09 23:35:16,950 - [INFO] - {'dataset': 'tmall', 'data_path': './data/', 'name': 'tmall_MFtau_cf_mode_weight_mean_uniform_gpu_cosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-4_l2_1e-5_t1_1.0_t2_0.6_drop_09_05_2024_23:35:16', 'train_ratio': 0.8, 'gnn': 'mftaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.0001, 'mess_dropout': True, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 1.0, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'uniform_gpu', 'generate_mode': 'cosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-05-09 23:35:16,975 - [INFO] - load train.txt
+2024-05-09 23:35:17,011 - [INFO] - building the adj mat ...
+2024-05-09 23:35:17,015 - [INFO] - train set len is 3390
+2024-05-09 23:35:17,015 - [INFO] - test set len is 1454
+2024-05-09 23:35:17,015 - [INFO] - loading over ...
+2024-05-09 23:35:17,015 - [INFO] - users are 3441 items are 563
+Adap_tau_Loss
+start to make tables
+2024-05-09 23:35:26,114 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-05-09 23:35:26,115 - [INFO] - start training ...
+3.996182482840501
+2024-05-09 23:35:26,118 - [INFO] - current w_0 is 5.708832295781008
+torch.Size([3441, 64])
+torch.Size([563, 64])

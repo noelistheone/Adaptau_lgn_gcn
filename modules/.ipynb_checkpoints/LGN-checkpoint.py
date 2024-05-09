@@ -264,7 +264,7 @@ class lgn_frame(nn.Module):
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
             return loss.mean() + emb_loss, loss_, emb_loss, tau, np.array([0.0])
         elif self.loss_name == "SSM_Loss":
-            loss, loss_ = self.loss_fn(y_pred)
+            loss, loss_ = self.loss_fn(u_e, pos_e, neg_e)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred, np.array([0.0])
         else:
             raise NotImplementedError("loss={} is not support".format(self.loss_name))

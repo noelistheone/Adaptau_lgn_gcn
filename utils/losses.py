@@ -30,7 +30,7 @@ class Adap_tau_Loss(nn.Module):
         return loss, loss_
 
 class SSM_Loss(nn.Module):
-    def __init__(self, margin=0, temperature=1., negative_weight=None, pos_mode=None):
+    def __init__(self, margin=0, temperature=1.0, negative_weight=None, pos_mode=None):
         super(SSM_Loss, self).__init__()
         self._margin = margin 
         self._temperature = temperature
@@ -49,8 +49,14 @@ class SSM_Loss(nn.Module):
         Ng = neg_logits.sum(dim=-1)
 
         loss = (- torch.log(pos_logits / Ng))
+#         pos_scores = torch.mul(u_e, pos_e)
+#         pos_scores = torch.sum(pos_scores, dim=1)
+#         neg_scores = torch.mul(u_e, neg_e)
+#         neg_scores = torch.sum(neg_scores, dim=1)
         
-        return loss, np.array([0.0])
+#         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+        
+        return loss, 0.
     
 class L2Loss(nn.Module):
     def __init__(self):

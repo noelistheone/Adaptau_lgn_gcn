@@ -71,7 +71,7 @@ class GraphConv(nn.Module):
 
 class lgn_tau_frame(nn.Module):
     def __init__(self, data_config, args_config, adj_mat, logger=None):
-        super(lgn_frame, self).__init__()
+        super(lgn_tau_frame, self).__init__()
 
         self.n_users = data_config['n_users']
         self.n_items = data_config['n_items']

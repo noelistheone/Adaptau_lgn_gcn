@@ -196,16 +196,18 @@ if __name__ == '__main__':
     from modules.LGN_tau import lgn_tau_frame
     from modules.LGN_tau_CF import lgn_tau_cf_frame
     #from modules.LGN_tau_CFed import lgn_tau_cfed_frame
-    #from modules.MF import MF
-    #from modules.MF_tau import MF_tau
+    from modules.MF_tau import MF_tau
+    from modules.MF_tau_CF import MF_tau_cf
     if args.gnn == 'lgn':
         model = lgn_frame(n_params, args, norm_mat, logger).to(device)
     elif args.gnn == "lgntau":
         model = lgn_tau_frame(n_params, args, norm_mat, logger).to(device)
     elif args.gnn == "lgntaucf":
         model = lgn_tau_cf_frame(n_params, args, norm_mat, logger).to(device)
-    elif args.gnn == "lgncfed":
-        model = lgn_tau_cfed_frame(n_params, args, norm_mat, logger).to(device)
+    elif args.gnn == "mftau":
+        model = MF_tau(n_params, args, norm_mat, logger).to(device)
+    elif args.gnn == "mftaucf":
+        model = MF_tau_cf(n_params, args, norm_mat, logger).to(device)
     else:
         raise NotImplementedError
     """define optimizer"""
@@ -318,7 +320,7 @@ if __name__ == '__main__':
                 loss += batch_loss.item()
                 s += args.batch_size
             train_e_t = time.time()
-            
+            #print(losses_train.shape)
             losses_train = torch.cat(losses_train, dim=0)
             loss_per_user = scatter(losses_train, train_cf_[:, 0], dim=0, reduce='mean')
             # valid

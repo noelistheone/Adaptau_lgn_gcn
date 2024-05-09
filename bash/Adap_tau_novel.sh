@@ -10,7 +10,7 @@ logdir="./log/"
 n_negs="$5"
 bsz="$6"
 loss_fn="Adap_tau_Loss"
-# loss_fn="SSM_Loss"
+#loss_fn="SSM_Loss"
 drop_bool="$7"
 t_1="${8}"
 t_2="${9}"
@@ -25,10 +25,19 @@ cd ..
 
 if [[ $gnn = "lgntaucf" ]]
 then
-        gnn_name="LGNtau_nce_cf"
+        gnn_name="LGNtau_cf"
 elif [[ $gnn = "lgn" ]]
 then
         gnn_name="LGN"
+elif [[ $gnn = "lgntau" ]]
+then
+        gnn_name="LGNtau"
+elif [[ $gnn = "mftau" ]]
+then
+        gnn_name="MFtau"
+elif [[ $gnn = "mftaucf" ]]
+then
+        gnn_name="MFtau_cf"
 else
         echo "NO loss"
         exit 1
