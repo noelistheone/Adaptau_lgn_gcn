@@ -1,0 +1,15 @@
+2024-05-21 14:07:48,587 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGN_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_21_05_2024_14:07:48', 'train_ratio': 0.8, 'gnn': 'lgn', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-05-21 14:07:50,659 - [INFO] - load train.txt
+2024-05-21 14:07:54,701 - [INFO] - building the adj mat ...
+2024-05-21 14:07:55,258 - [INFO] - train set len is 810128
+2024-05-21 14:07:55,258 - [INFO] - test set len is 217242
+2024-05-21 14:07:55,258 - [INFO] - loading over ...
+2024-05-21 14:07:55,258 - [INFO] - users are 29858 items are 40981
+Adap_tau_Loss
+start to make tables
+2024-05-21 14:08:06,581 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-05-21 14:08:06,581 - [INFO] - start training ...
+6.425596769544532
+2024-05-21 14:08:06,613 - [INFO] - current w_0 is 9.17942388767301
+torch.Size([2048, 256])
+torch.Size([29858, 4, 64])

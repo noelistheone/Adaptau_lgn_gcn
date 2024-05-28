@@ -148,7 +148,7 @@ class lgn_tau_cf_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         self.reg_loss = losses.L2Loss()
-        self.lamda = 50#########################################################超参数定义
+        self.lamda = 1e+1#########################################################超参数定义
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -227,24 +227,24 @@ class lgn_tau_cf_frame(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
     
-    def reg_data_handler(self, user, item):
+    def reg_data_handler(self, user_online, item_online, user, item):
         #print(user_embed.shape)
         #print(item_embed.shape)
         # u_online = user_embed
         # i_online = item_embed
-        u_online, i_online = self.gcn(self.user_embed,
-                                     self.item_embed,
-                                     edge_dropout=True,
-                                     mess_dropout=False,
-                                     perturb=True)
+        # u_online, i_online = self.gcn(self.user_embed,
+        #                              self.item_embed,
+        #                              edge_dropout=True,
+        #                              mess_dropout=True,
+        #                              perturb=True)
         with torch.no_grad():
-            u_target, i_target = u_online.clone(), i_online.clone()
+            u_target, i_target = user_online.clone(), item_online.clone()
             # u_target, i_target = self.gcn(self.user_embed,
             #                               self.item_embed,
-            #                               edge_dropout=False,
-            #                               mess_dropout=False,
+            #                               edge_dropout=True,
+            #                               mess_dropout=True,
             #                               perturb=True)
-            # edge pruning
+            # # edge pruning
             #print(u_target.shape)
             x = self.sparse_dropout(self.sparse_norm_adj)
             all_embeddings = torch.cat([u_target, i_target], 0)
@@ -253,9 +253,10 @@ class lgn_tau_cf_frame(nn.Module):
             #print(x.shape)
             #print(all_embeddings.shape)
             all_embeddings = torch.transpose(all_embeddings, 0, 1)
-            # random_noise = torch.rand_like(all_embeddings).cuda()
-            # all_embeddings += torch.sign(all_embeddings) * F.normalize(random_noise, dim=-1) * 0.1
+            
             all_embeddings = torch.sparse.mm(x, all_embeddings)  # Transpose and perform sparse matrix multiplication
+            random_noise = torch.rand_like(all_embeddings).cuda()
+            all_embeddings += torch.sign(all_embeddings) * F.normalize(random_noise, dim=-1) * 0.1
             u_target = all_embeddings[:self.n_users, :]
             i_target = all_embeddings[self.n_users:, :]
             
@@ -264,13 +265,13 @@ class lgn_tau_cf_frame(nn.Module):
             u_target = u_target[user, :]
             i_target = i_target[item, :]
 
-        u_online = u_online[user, :]
-        i_online = i_online[item, :]
+        u_online = user_online[user, :]
+        i_online = item_online[item, :]
         return u_online, u_target, i_online, i_target
     
     def loss_cf(self, p, z):  # negative cosine similarity
-        p = p.view(-1, p.size(0))
-        p = torch.transpose(p, 0, 1)
+        # p = p.view(-1, p.size(0))
+        # p = torch.transpose(p, 0, 1)
         #print(p.shape)
         #print(z.shape)
         # print(p.t().shape)
@@ -278,17 +279,39 @@ class lgn_tau_cf_frame(nn.Module):
 
         return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
     
-    def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
-        #reg_loss = self.reg_loss(u_online, i_online)
-
-        u_online_1, i_online_1 = self.predictor(u_online), self.predictor(i_online)
+    def calculate_cf_loss(self, u_online, user_target, i_online, item_target):
+        user_online = self.predictor(u_online)
+        item_online = self.predictor(i_online)
+        user_online = u_online.view(-1, u_online.size(0))
+        item_online = i_online.view(-1, i_online.size(0))
+        batch_size = user_online.size(0)
+        num_items = item_online.size(0)  # Changed to size(0) for number of items
         
-        loss_ui = self.loss_cf(u_online_1, i_target)/2
-        loss_iu = self.loss_cf(i_online_1, u_target)/2
-        # loss_uu = self.loss_cf(u_online_1, u_target)/4
-        # loss_ii = self.loss_cf(i_online_1, i_target)/4
+        # Compute predicted scores
+        scores = torch.matmul(user_online, item_online.t())
 
-        return loss_ui + loss_iu
+        # Initialize loss
+        total_loss = 0.0
+
+        for i in range(batch_size):
+            
+            
+            # Extract the index of the target item
+            target_item_index = item_target[i].long()
+            
+            # Extract scores for the target item
+            target_item_score = scores[i, target_item_index].mean()
+            
+            
+            # If the negative item is ranked higher than the target item, update loss
+            
+            rank = torch.sum(scores[i] >= target_item_score)
+            if rank < num_items:
+                loss = torch.log(torch.tensor(num_items / rank, dtype=torch.float32))
+                total_loss += loss
+
+        return torch.tensor(total_loss / batch_size)
+
     
     def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
         user = batch['users']
@@ -298,13 +321,10 @@ class lgn_tau_cf_frame(nn.Module):
                                               edge_dropout=self.edge_dropout,
                                               mess_dropout=self.mess_dropout,
                                               perturb=False)
-        #print(user_gcn_emb.shape)
+       
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
-        u_online, u_target, i_online, i_target = self.reg_data_handler(user, pos_item)
-        #print(u_online.shape)
-        #print(u_target.shape)
-        #print(i_online.shape)
-        #print(i_target.shape)
+        u_online, u_target, i_online, i_target = self.reg_data_handler(user_gcn_emb, item_gcn_emb, user, pos_item)
+       
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)

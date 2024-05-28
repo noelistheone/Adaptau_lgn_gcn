@@ -1,0 +1,97 @@
+2024-05-28 15:41:29,084 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGNtau_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_28_05_2024_15:41:29', 'train_ratio': 0.8, 'gnn': 'lgntau', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-05-28 15:41:31,288 - [INFO] - load train.txt
+2024-05-28 15:41:36,053 - [INFO] - building the adj mat ...
+2024-05-28 15:41:36,646 - [INFO] - train set len is 810128
+2024-05-28 15:41:36,646 - [INFO] - test set len is 217242
+2024-05-28 15:41:36,646 - [INFO] - loading over ...
+2024-05-28 15:41:36,646 - [INFO] - users are 29858 items are 40981
+Adap_tau_Loss
+start to make tables
+2024-05-28 15:41:58,224 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-05-28 15:41:58,225 - [INFO] - start training ...
+6.425596769544532
+2024-05-28 15:41:58,261 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:43:53,786 - [INFO] - E:0|TAU:9.179 9.179, train_time: 113.6, VALID_time: 1.886, loss: 1.811e+03, emb_loss:2.86e-07, nce_loss:2.113e-05, best_valid(recall@20): -inf
+valid 	 N@5: 0.1217, R@5: 0.07883, P@5: 0.09563
+valid 	 N@10: 0.1235, R@10: 0.1143, P@10: 0.07002
+valid 	 N@15: 0.1309, R@15: 0.1421, P@15: 0.0581
+valid 	 N@20: 0.1383, R@20: 0.1656, P@20: 0.05096
+valid 	 N@25: 0.1449, R@25: 0.1863, P@25: 0.04595
+valid 	 N@30: 0.1508, R@30: 0.2047, P@30: 0.04211
+valid 	 N@40: 0.1606, R@40: 0.2363, P@40: 0.03655
+valid 	 N@50: 0.1684, R@50: 0.262, P@50: 0.03259
+
+6.425596769544532
+2024-05-28 15:43:53,847 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:45:49,827 - [INFO] - E:1|TAU:6.228 24.95, train_time: 114.3, VALID_time: 1.649, loss: 1.735e+03, emb_loss:5.76e-07, nce_loss:4.223e-05, best_valid(recall@20): 0.1656
+valid 	 N@5: 0.1232, R@5: 0.07845, P@5: 0.09674
+valid 	 N@10: 0.1243, R@10: 0.114, P@10: 0.07089
+valid 	 N@15: 0.1313, R@15: 0.1414, P@15: 0.05882
+valid 	 N@20: 0.1382, R@20: 0.1641, P@20: 0.05131
+valid 	 N@25: 0.1441, R@25: 0.1827, P@25: 0.04593
+valid 	 N@30: 0.1494, R@30: 0.1997, P@30: 0.04184
+valid 	 N@40: 0.1581, R@40: 0.2277, P@40: 0.03601
+valid 	 N@50: 0.1655, R@50: 0.252, P@50: 0.03203
+
+6.425596769544532
+2024-05-28 15:45:49,857 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:47:45,449 - [INFO] - E:2|TAU:6.529 23.71, train_time: 114.0, VALID_time: 1.611, loss: 1.53e+03, emb_loss:8.694e-07, nce_loss:6.28e-05, best_valid(recall@20): 0.1656
+valid 	 N@5: 0.13, R@5: 0.08359, P@5: 0.1022
+valid 	 N@10: 0.1313, R@10: 0.1208, P@10: 0.07454
+valid 	 N@15: 0.1391, R@15: 0.1503, P@15: 0.06208
+valid 	 N@20: 0.1466, R@20: 0.1744, P@20: 0.05426
+valid 	 N@25: 0.1532, R@25: 0.1953, P@25: 0.04874
+valid 	 N@30: 0.1591, R@30: 0.214, P@30: 0.04457
+valid 	 N@40: 0.1688, R@40: 0.245, P@40: 0.03848
+valid 	 N@50: 0.1768, R@50: 0.2714, P@50: 0.03424
+
+6.425596769544532
+2024-05-28 15:47:45,518 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:49:41,237 - [INFO] - E:3|TAU:6.511 24.89, train_time: 114.1, VALID_time: 1.645, loss: 1.507e+03, emb_loss:1.12e-06, nce_loss:8.103e-05, best_valid(recall@20): 0.1744
+valid 	 N@5: 0.1318, R@5: 0.08491, P@5: 0.1037
+valid 	 N@10: 0.1337, R@10: 0.1238, P@10: 0.07618
+valid 	 N@15: 0.1417, R@15: 0.1538, P@15: 0.0633
+valid 	 N@20: 0.1495, R@20: 0.1793, P@20: 0.05536
+valid 	 N@25: 0.1565, R@25: 0.2011, P@25: 0.04986
+valid 	 N@30: 0.1624, R@30: 0.2196, P@30: 0.04549
+valid 	 N@40: 0.1723, R@40: 0.2514, P@40: 0.03928
+valid 	 N@50: 0.1803, R@50: 0.2775, P@50: 0.03492
+
+6.425596769544532
+2024-05-28 15:49:41,314 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:51:37,042 - [INFO] - E:4|TAU:6.5 22.13, train_time: 114.0, VALID_time: 1.707, loss: 1.484e+03, emb_loss:1.374e-06, nce_loss:9.903e-05, best_valid(recall@20): 0.1793
+valid 	 N@5: 0.1349, R@5: 0.08698, P@5: 0.1056
+valid 	 N@10: 0.137, R@10: 0.1266, P@10: 0.07767
+valid 	 N@15: 0.145, R@15: 0.157, P@15: 0.06441
+valid 	 N@20: 0.1528, R@20: 0.1824, P@20: 0.0563
+valid 	 N@25: 0.1595, R@25: 0.2037, P@25: 0.0504
+valid 	 N@30: 0.1655, R@30: 0.2224, P@30: 0.04603
+valid 	 N@40: 0.1756, R@40: 0.2546, P@40: 0.03975
+valid 	 N@50: 0.1838, R@50: 0.2818, P@50: 0.03534
+
+6.425596769544532
+2024-05-28 15:51:37,119 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:53:32,900 - [INFO] - E:5|TAU:6.515 20.56, train_time: 114.1, VALID_time: 1.645, loss: 1.471e+03, emb_loss:1.64e-06, nce_loss:0.0001178, best_valid(recall@20): 0.1824
+valid 	 N@5: 0.1355, R@5: 0.08756, P@5: 0.1065
+valid 	 N@10: 0.1373, R@10: 0.1272, P@10: 0.07783
+valid 	 N@15: 0.1452, R@15: 0.1572, P@15: 0.06454
+valid 	 N@20: 0.1532, R@20: 0.1831, P@20: 0.05656
+valid 	 N@25: 0.1601, R@25: 0.2048, P@25: 0.05073
+valid 	 N@30: 0.1662, R@30: 0.2242, P@30: 0.04636
+valid 	 N@40: 0.1765, R@40: 0.2569, P@40: 0.04003
+valid 	 N@50: 0.1847, R@50: 0.2842, P@50: 0.03558
+
+6.425596769544532
+2024-05-28 15:53:32,971 - [INFO] - current w_0 is 9.17942388767301
+2024-05-28 15:55:28,167 - [INFO] - E:6|TAU:6.513 19.46, train_time: 113.7, VALID_time: 1.507, loss: 1.46e+03, emb_loss:1.923e-06, nce_loss:0.0001379, best_valid(recall@20): 0.1831
+valid 	 N@5: 0.1358, R@5: 0.08808, P@5: 0.1066
+valid 	 N@10: 0.1378, R@10: 0.1276, P@10: 0.07814
+valid 	 N@15: 0.1457, R@15: 0.1577, P@15: 0.06471
+valid 	 N@20: 0.1537, R@20: 0.1834, P@20: 0.05662
+valid 	 N@25: 0.1607, R@25: 0.2055, P@25: 0.05084
+valid 	 N@30: 0.1667, R@30: 0.2244, P@30: 0.04639
+valid 	 N@40: 0.177, R@40: 0.2574, P@40: 0.0401
+valid 	 N@50: 0.1851, R@50: 0.2841, P@50: 0.03561
+
+6.425596769544532
+2024-05-28 15:55:28,234 - [INFO] - current w_0 is 9.17942388767301

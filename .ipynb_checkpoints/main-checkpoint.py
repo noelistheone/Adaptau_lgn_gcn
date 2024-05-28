@@ -122,6 +122,9 @@ class Sample(object):
         entity_pairs = train_entity_pairs[start: end]
         feed_dict['users'] = entity_pairs[:, 0]
         feed_dict['pos_items'] = entity_pairs[:, 1]
+        # Get all items (both positive and negative)
+        # all_items = np.concatenate((entity_pairs[:, 1], feed_dict['neg_items'].reshape(-1)))
+        # feed_dict['items'] = all_items
         if self.sampling_method == "uniform":
             neg_items = np.random.choice(self.n_items, size=(entity_pairs.shape[0], n_negs),
                                         replace=True)
@@ -132,6 +135,7 @@ class Sample(object):
         elif self.sampling_method == "neg":
             feed_dict['neg_items'] = self.get_sample_by_key_ids(entity_pairs[:, 0], n_negs*K)
         elif self.sampling_method == "no_sample":
+            
             return feed_dict
     
         return feed_dict
@@ -141,6 +145,9 @@ class Sample(object):
         entity_pairs = train_entity_pairs[start:]
         feed_dict['users'] = entity_pairs[:, 0]
         feed_dict['pos_items'] = entity_pairs[:, 1]
+        # Get all items (both positive and negative)
+        # all_items = np.concatenate((entity_pairs[:, 1], feed_dict['neg_items'].reshape(-1)))
+        # feed_dict['items'] = all_items
         if self.sampling_method == "uniform":
             neg_items = np.random.choice(self.n_items, size=(entity_pairs.shape[0], n_negs),
                                         replace=True)
