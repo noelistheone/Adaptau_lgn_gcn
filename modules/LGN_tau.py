@@ -148,7 +148,7 @@ class lgn_tau_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         self.reg_loss = losses.L2Loss()
-        self.lamda = 1e+1#########################################################超参数定义
+        self.lamda = 1#########################################################超参数定义
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -254,7 +254,7 @@ class lgn_tau_frame(nn.Module):
             #print(all_embeddings.shape)
             all_embeddings = torch.transpose(all_embeddings, 0, 1)
             random_noise = torch.rand_like(all_embeddings).cuda()
-            all_embeddings += torch.sign(all_embeddings) * F.normalize(random_noise, dim=-1) * 0.1
+            all_embeddings += torch.sign(all_embeddings) * F.normalize(random_noise, dim=-1) * 0.01
             all_embeddings = torch.sparse.mm(x, all_embeddings)  # Transpose and perform sparse matrix multiplication
             u_target = all_embeddings[:self.n_users, :]
             i_target = all_embeddings[self.n_users:, :]

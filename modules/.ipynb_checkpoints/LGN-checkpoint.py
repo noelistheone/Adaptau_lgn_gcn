@@ -312,19 +312,37 @@ class lgn_frame(nn.Module):
         # Calculate SCF loss
         # scf_loss = self.lamda * self.scf_loss_fn(user_gcn_emb, pos_gcn_emb)
         # Self-supervised Contrastive Loss
-        """
-        https://arxiv.org/pdf/2403.07265
-        Self-supervised Contrastive Learning for Implicit Collaborative
-        Filtering
+#         """
+#         https://arxiv.org/pdf/2403.07265
+#         Self-supervised Contrastive Learning for Implicit Collaborative
+#         Filtering
 
+#         """
+#         pos_loss = -torch.log(torch.sigmoid((u_e * pos_e).sum(dim=1)))
+#         scf_loss = pos_loss.mean() * 3
+        
         """
-        pos_loss = -torch.log(torch.sigmoid((u_e * pos_e).sum(dim=1)))
-        scf_loss = pos_loss.mean() * 3
+        https://arxiv.org/pdf/2010.14395
+        Contrastive Learning for Sequential Recommendation
+        """
+        # Feature augmentation
+        aug_pos_e = pos_e + 0.1 * torch.randn_like(pos_e)
+        aug_u_e = u_e + 0.1 * torch.randn_like(u_e)
+
+        pos_sim = F.cosine_similarity(u_e, pos_e, dim=-1)
+        aug_pos_sim = F.cosine_similarity(u_e, aug_pos_e, dim=-1)
+
+        # Calculate the numerator and denominator
+        numerator = torch.exp(pos_sim)
+        denominator = torch.exp(pos_sim) + torch.exp(aug_pos_sim)
+
+        loss = -torch.log(numerator / denominator)
+        total_contrastive_loss = loss.mean()
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + scf_loss, loss_, emb_loss, tau, scf_loss
+            return loss.mean() + emb_loss + total_contrastive_loss, loss_, emb_loss, tau, total_contrastive_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred
