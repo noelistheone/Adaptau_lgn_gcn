@@ -148,7 +148,7 @@ class lgn_tau_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         self.reg_loss = losses.L2Loss()
-        self.lamda = 1e-2#########################################################超参数定义
+        self.lamda = 1e+1#########################################################超参数定义
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -275,7 +275,10 @@ class lgn_tau_frame(nn.Module):
     
     
     def calculate_cf_loss(self, u_online, user_target, i_online, item_target, alpha=1.0, beta=1.0, temperature=0.5):
-        #Multi-label Triplet Embeddings for Image Annotation from User-Generated Tags
+        u_online, i_online = self.predictor(u_online), self.predictor(i_online)
+        
+        #  Multi-label Triplet Embeddings for Image Annotation from User-Generated Tags
+        
         user_online = u_online.view(-1, u_online.size(0))
         item_online = i_online.view(-1, i_online.size(0))
         user_online = torch.transpose(user_online, 0, 1)
