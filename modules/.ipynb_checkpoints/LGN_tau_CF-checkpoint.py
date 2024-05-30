@@ -153,7 +153,8 @@ class lgn_tau_cf_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
-        self.self_supervised_loss = SelfSupervisedLoss(args_config.temperature)
+        self.self_supervised_loss = SelfSupervisedLoss(temperature=3.0)
+        self.lamda = 2
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -321,7 +322,7 @@ class lgn_tau_cf_frame(nn.Module):
         emb_loss = self.decay * regularize / batch_size
         
         # Calculate self-supervised loss
-        ssl_loss = self.self_supervised_loss(u_e, pos_e)
+        ssl_loss = self.lamda * self.self_supervised_loss(u_e, pos_e)
 
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None

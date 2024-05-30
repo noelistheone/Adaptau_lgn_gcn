@@ -16,23 +16,17 @@ from utils import losses
 from scipy.special import lambertw
 
 
-class ModifiedSCF_Loss(nn.Module):
-    def __init__(self, margin=1.0):
-        super(ModifiedSCF_Loss, self).__init__()
-        self.margin = margin
+class SelfSupervisedLoss(nn.Module):
+    def __init__(self):
+        super(SelfSupervisedLoss, self).__init__()
 
-    def forward(self, user_embeddings, positive_item_embeddings):
-        # Calculate scores
-        positive_scores = (user_embeddings * positive_item_embeddings).sum(dim=1)
-        
-        # Calculate hinge loss (encouraging diversity)
-        diversity_loss = F.relu(self.margin - positive_scores.unsqueeze(1) + positive_scores).mean()
-        
-        # Calculate similarity loss (encouraging similarity for positive pairs)
-        similarity_loss = -positive_scores.mean()
-        
-        # Combine losses
-        return similarity_loss + diversity_loss
+    def forward(self, p_u, z_u, p_u_prime, z_u_prime, z_u_hat, h_u, z_u_hat_prime, h_u_prime):
+        # Calculate the self-supervised loss based on the provided formula
+        term1 = torch.log(torch.sigmoid(torch.sum(p_u * z_u, dim=-1) - torch.sum(p_u_prime * z_u_prime, dim=-1)))
+        term2 = torch.log(torch.sigmoid(torch.sum(z_u * h_u, dim=-1) - torch.sum(z_u_hat * h_u_prime, dim=-1)))
+        loss = - (term1 + term2).mean()
+        return loss
+
 
 class GraphConv(nn.Module):
     """
@@ -143,6 +137,12 @@ class lgn_frame(nn.Module):
         self.sampling_method = args_config.sampling_method
         # self.scf_loss_fn = ModifiedSCF_Loss()
         self.lamda = 1.0
+        
+        # Self-supervised loss
+        self.self_supervised_loss = SelfSupervisedLoss()
+
+        # Define any augmentation parameters if needed
+        self.augmentation_rate = 0.3
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -156,6 +156,13 @@ class lgn_frame(nn.Module):
                          interact_mat=self.sparse_norm_adj,
                          edge_dropout_rate=self.edge_dropout_rate,
                          mess_dropout_rate=self.mess_dropout_rate)
+    
+    def _augment_embeddings(self, embeddings):
+        # Define an augmentation method, for example, dropout
+        augmented_embeddings = F.dropout(embeddings, p=self.augmentation_rate)
+        augmented_embeddings = 0.01 * torch.randn_like(augmented_embeddings) + augmented_embeddings
+        
+        return augmented_embeddings
 
     def _convert_sp_mat_to_sp_tensor(self, X):
         coo = X.tocoo()
@@ -205,15 +212,37 @@ class lgn_frame(nn.Module):
                                               mess_dropout=self.mess_dropout)
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         
+        # Augmented embeddings
+        user_gcn_emb_aug = self._augment_embeddings(user_gcn_emb)
+        item_gcn_emb_aug = self._augment_embeddings(item_gcn_emb)
+
+        # Calculate the self-supervised loss
+        user_self_supervised_loss = self.self_supervised_loss(user_gcn_emb[user], user_gcn_emb_aug[user], 
+                                                              item_gcn_emb[pos_item], item_gcn_emb_aug[pos_item], 
+                                                              user_gcn_emb_aug[user], item_gcn_emb[pos_item], 
+                                                              item_gcn_emb_aug[pos_item], user_gcn_emb[user])
+        item_self_supervised_loss = self.self_supervised_loss(item_gcn_emb[pos_item], item_gcn_emb_aug[pos_item], 
+                                                              user_gcn_emb[user], user_gcn_emb_aug[user], 
+                                                              item_gcn_emb_aug[pos_item], user_gcn_emb[user], 
+                                                              user_gcn_emb_aug[user], item_gcn_emb[pos_item])
+        
+        
+        
+        """
+        Self-Supervised Multi-Channel Hypergraph Convolutional Network for Social Recommendation
+        https://arxiv.org/pdf/2101.06448
+        """
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)
             self._update_tau_memory(tau_user)
         if self.sampling_method == "no_sample":
-            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, w_0)
+            rec_loss, loss_, emb_loss, tau = self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, w_0)
         else:
             neg_item = batch['neg_items']
-            return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
+            rec_loss, loss_, emb_loss, tau = self.Uniform_loss(user_gcn_emb_combined[user], item_gcn_emb_combined[pos_item], item_gcn_emb_combined[neg_item], user, w_0)
+            
+        return rec_loss + user_self_supervised_loss + item_self_supervised_loss, loss_, emb_loss, tau, user_self_supervised_loss + item_self_supervised_loss
        
 
     def pooling(self, embeddings):
@@ -321,28 +350,28 @@ class lgn_frame(nn.Module):
 #         pos_loss = -torch.log(torch.sigmoid((u_e * pos_e).sum(dim=1)))
 #         scf_loss = pos_loss.mean() * 3
         
-        """
-        https://arxiv.org/pdf/2010.14395
-        Contrastive Learning for Sequential Recommendation
-        """
-        # Feature augmentation
-        aug_pos_e = pos_e + 0.1 * torch.randn_like(pos_e)
-        aug_u_e = u_e + 0.1 * torch.randn_like(u_e)
+#         """
+#         https://arxiv.org/pdf/2010.14395
+#         Contrastive Learning for Sequential Recommendation
+#         """
+#         # Feature augmentation
+#         aug_pos_e = pos_e + 0.1 * torch.randn_like(pos_e)
+#         aug_u_e = u_e + 0.1 * torch.randn_like(u_e)
 
-        pos_sim = F.cosine_similarity(u_e, pos_e, dim=-1)
-        aug_pos_sim = F.cosine_similarity(u_e, aug_pos_e, dim=-1)
+#         pos_sim = F.cosine_similarity(aug_u_e, pos_e, dim=-1)
+#         aug_pos_sim = F.cosine_similarity(aug_u_e, aug_pos_e, dim=-1)
 
-        # Calculate the numerator and denominator
-        numerator = torch.exp(pos_sim)
-        denominator = torch.exp(pos_sim) + torch.exp(aug_pos_sim)
+#         # Calculate the numerator and denominator
+#         numerator = torch.exp(pos_sim)
+#         denominator = torch.exp(pos_sim) + torch.exp(aug_pos_sim)
 
-        loss = -torch.log(numerator / denominator)
-        total_contrastive_loss = loss.mean()
+#         loss = -torch.log(numerator / denominator)
+#         total_contrastive_loss = loss.mean()
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + total_contrastive_loss, loss_, emb_loss, tau, total_contrastive_loss
+            return loss.mean() + emb_loss, loss_, emb_loss, tau
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

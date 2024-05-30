@@ -1,25 +1,13 @@
-2024-05-29 14:52:51,317 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGN_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_29_05_2024_14:52:51', 'train_ratio': 0.8, 'gnn': 'lgn', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
-2024-05-29 14:52:53,443 - [INFO] - load train.txt
-2024-05-29 14:52:57,772 - [INFO] - building the adj mat ...
-2024-05-29 14:52:58,681 - [INFO] - train set len is 810128
-2024-05-29 14:52:58,681 - [INFO] - test set len is 217242
-2024-05-29 14:52:58,681 - [INFO] - loading over ...
-2024-05-29 14:52:58,681 - [INFO] - users are 29858 items are 40981
+2024-05-30 23:45:50,216 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGN_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_30_05_2024_23:45:50', 'train_ratio': 0.8, 'gnn': 'lgn', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-05-30 23:45:52,299 - [INFO] - load train.txt
+2024-05-30 23:45:56,588 - [INFO] - building the adj mat ...
+2024-05-30 23:45:57,143 - [INFO] - train set len is 810128
+2024-05-30 23:45:57,143 - [INFO] - test set len is 217242
+2024-05-30 23:45:57,143 - [INFO] - loading over ...
+2024-05-30 23:45:57,143 - [INFO] - users are 29858 items are 40981
 Adap_tau_Loss
 start to make tables
-2024-05-29 14:53:25,823 - [INFO] - Evaluation Protocols is 1 @ 20
-2024-05-29 14:53:25,824 - [INFO] - start training ...
+2024-05-30 23:46:12,973 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-05-30 23:46:12,974 - [INFO] - start training ...
 6.425596769544532
-2024-05-29 14:53:25,866 - [INFO] - current w_0 is 9.17942388767301
-2024-05-29 14:54:54,537 - [INFO] - E:0|TAU:9.179 9.179, train_time: 86.68, VALID_time: 1.986, loss: 2.063e+03, emb_loss:2.885e-07, nce_loss:0.6367, best_valid(recall@20): -inf
-valid 	 N@5: 0.1218, R@5: 0.07947, P@5: 0.09595
-valid 	 N@10: 0.1239, R@10: 0.1155, P@10: 0.07046
-valid 	 N@15: 0.1315, R@15: 0.1434, P@15: 0.0586
-valid 	 N@20: 0.1384, R@20: 0.1661, P@20: 0.051
-valid 	 N@25: 0.145, R@25: 0.1868, P@25: 0.04595
-valid 	 N@30: 0.1505, R@30: 0.2039, P@30: 0.04193
-valid 	 N@40: 0.1601, R@40: 0.2346, P@40: 0.03633
-valid 	 N@50: 0.1681, R@50: 0.2611, P@50: 0.03248
-
-6.425596769544532
-2024-05-29 14:54:54,601 - [INFO] - current w_0 is 9.17942388767301
+2024-05-30 23:46:13,009 - [INFO] - current w_0 is 9.17942388767301
