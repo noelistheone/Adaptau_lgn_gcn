@@ -137,8 +137,8 @@ class lgn_tau_frame(nn.Module):
     
         self.generate_mode = args_config.generate_mode
         
-        self.lamda = 1
-        self.self_supervised_loss = SelfSupervisedLoss(self.temperature)
+        self.lamda = 1.0
+        self.self_supervised_loss = SelfSupervisedLoss(temperature=5.0)
 
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
@@ -328,8 +328,8 @@ class lgn_tau_frame(nn.Module):
         Contrastive Learning for Sequential Recommendation
         """
         # Feature augmentation
-        aug_pos_e = pos_e + 0.1 * torch.randn_like(pos_e)
-        aug_u_e = u_e + 0.1 * torch.randn_like(u_e)
+        aug_pos_e = pos_e + 0.05 * torch.randn_like(pos_e)
+        aug_u_e = u_e + 0.05 * torch.randn_like(u_e)
 
         pos_sim = F.cosine_similarity(u_e, pos_e, dim=-1)
         aug_pos_sim = F.cosine_similarity(aug_u_e, aug_pos_e, dim=-1)
@@ -339,7 +339,7 @@ class lgn_tau_frame(nn.Module):
         denominator = torch.exp(pos_sim) + torch.exp(aug_pos_sim)
 
         loss = -torch.log(numerator / denominator)
-        total_contrastive_loss = loss.mean() * 2
+        total_contrastive_loss = loss.mean() * 3
 
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None

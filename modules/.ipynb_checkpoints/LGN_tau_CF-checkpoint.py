@@ -15,36 +15,6 @@ sys.path.append("..")
 from utils import losses
 from scipy.special import lambertw
 
-"""
-https://dl.acm.org/doi/abs/10.1145/3459637.3481952
-Self-supervised Learning for Large-scale Item Recommendations
-"""
-class SelfSupervisedLoss(nn.Module):
-    def __init__(self, temperature=0.1):
-        super(SelfSupervisedLoss, self).__init__()
-        self.temperature = temperature
-
-    def forward(self, user_embed, pos_embed):
-        pos_score = torch.matmul(user_embed, pos_embed.t()) / self.temperature
-        pos_score = torch.exp(pos_score)
-        pos_score = pos_score / torch.sum(pos_score, dim=1, keepdim=True)
-
-        user_self_score = torch.matmul(user_embed, user_embed.t()) / self.temperature
-        item_self_score = torch.matmul(pos_embed, pos_embed.t()) / self.temperature
-
-        user_self_score = torch.exp(user_self_score)
-        item_self_score = torch.exp(item_self_score)
-
-        user_self_score = user_self_score / torch.sum(user_self_score, dim=1, keepdim=True)
-        item_self_score = item_self_score / torch.sum(item_self_score, dim=1, keepdim=True)
-
-        loss = -torch.mean(torch.log(torch.diag(pos_score))) \
-               -torch.mean(torch.log(torch.diag(user_self_score))) \
-               -torch.mean(torch.log(torch.diag(item_self_score)))
-
-        return loss
-
-
 class GraphConv(nn.Module):
     """
     Graph Convolutional Network
@@ -147,14 +117,11 @@ class lgn_tau_cf_frame(nn.Module):
             print(self.loss_name)
             self.loss_fn = losses.SSM_Loss(self._margin, self.temperature, self._negativa_weight, args_config.pos_mode)
         else:
-            raise NotImplementedError("loss={} is not support".format(temperature=args_config.loss_fn))
+            raise NotImplementedError("loss={} is not support".format(args_config.loss_fn))
         
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
-        
-        self.self_supervised_loss = SelfSupervisedLoss(temperature=3.0)
-        self.lamda = 2
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -268,6 +235,20 @@ class lgn_tau_cf_frame(nn.Module):
 
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
+    
+    def loss_fn1(self, p, z):  # negative cosine similarity
+        return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
+
+    def calculate_cf_loss(self, u_online, u_target, i_online, i_target, batch_size):
+        
+        
+
+        
+
+        loss_ui = self.loss_fn1(u_online, i_target)/2
+        loss_iu = self.loss_fn1(i_online, u_target)/2
+
+        return loss_ui + loss_iu
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -303,6 +284,7 @@ class lgn_tau_cf_frame(nn.Module):
 
     def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, w_0=None):
         batch_size = user_gcn_emb.shape[0]
+        
         u_e = self.pooling(user_gcn_emb)  # [B, F]
         pos_e = self.pooling(pos_gcn_emb) # [B, F]
 
@@ -310,6 +292,10 @@ class lgn_tau_cf_frame(nn.Module):
             u_e = F.normalize(u_e, dim=-1)
         if self.i_norm:
             pos_e = F.normalize(pos_e, dim=-1)
+            
+        u_aug = F.dropout(u_e, p=0.1)
+        pos_aug = F.dropout(pos_e, p=0.1)
+        cf_loss = self.calculate_cf_loss(u_e, u_aug, pos_e, pos_aug, batch_size)
         # contrust y_pred framework
         row_swap = torch.cat([torch.arange(batch_size).long(), torch.arange(batch_size).long()]).to(self.device)
         col_before = torch.cat([torch.arange(batch_size).long(), torch.zeros(batch_size).long()]).to(self.device)
@@ -320,15 +306,12 @@ class lgn_tau_cf_frame(nn.Module):
         regularize = (torch.norm(user_gcn_emb[:, :]) ** 2
                        + torch.norm(pos_gcn_emb[:, :]) ** 2) / 2  # take hop=0
         emb_loss = self.decay * regularize / batch_size
-        
-        # Calculate self-supervised loss
-        ssl_loss = self.lamda * self.self_supervised_loss(u_e, pos_e)
 
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + ssl_loss, loss_, emb_loss, tau, ssl_loss
+            return loss.mean() + emb_loss + cf_loss, loss_, emb_loss, tau, cf_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred
