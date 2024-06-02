@@ -47,7 +47,7 @@ class GraphConv(nn.Module):
         return out * (1. / (1 - rate))
 
     def forward(self, user_embed, item_embed,
-                mess_dropout=True, edge_dropout=True):
+                mess_dropout=True, edge_dropout=True, perturb=False):
         # user_embed: [n_users, channel]
         # item_embed: [n_items, channel]
 
@@ -64,6 +64,9 @@ class GraphConv(nn.Module):
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
+            if perturb:
+                random_noise = torch.rand_like(agg_embed).cuda()
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.05
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
@@ -215,7 +218,7 @@ class lgn_frame(nn.Module):
                                               mess_dropout=self.mess_dropout)
         
         # Calculate contrastive loss
-        cl_loss = self.lamda * self.cal_cl_loss(user, pos_item)
+        cl_loss = self.lamda * self.cal_cl_loss(user_gcn_emb, item_gcn_emb, user, pos_item)
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
@@ -241,11 +244,12 @@ class lgn_frame(nn.Module):
         else:  # final
             return embeddings[:, -1, :]
 
-    def gcn_emb(self):
+    def gcn_emb(self, noise=False):
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
-                                              mess_dropout=False)
+                                              mess_dropout=False,
+                                              perturb=noise)
         user_gcn_emb, item_gcn_emb = self.pooling(user_gcn_emb), self.pooling(item_gcn_emb)
         return user_gcn_emb.detach(), item_gcn_emb.detach()
 
@@ -282,14 +286,21 @@ class lgn_frame(nn.Module):
 
         Return: Average InfoNCE Loss
         """
-        view1 = self.pooling(view1)
-        view2 = self.pooling(view2)
+        # view1 = self.pooling(view1)
+        # view2 = self.pooling(view2)
         if b_cos:
             view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
 
-        pos_score = (view1 @ view2.T) / temperature
-        score = torch.diag(F.log_softmax(pos_score, dim=1))
-        return -score.mean()
+#         pos_score = (view1 @ view2.T) / temperature
+#         score = torch.diag(F.log_softmax(pos_score, dim=1))
+#         return -score.mean()
+        F.normalize(view2, dim=1)
+        pos_score = (view1 * view2).sum(dim=-1)
+        pos_score = torch.exp(pos_score / temperature)
+        ttl_score = torch.matmul(view1, view2.transpose(0, 1))
+        ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
+        cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
+        return torch.mean(cl_loss)
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -322,13 +333,24 @@ class lgn_frame(nn.Module):
         else:
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
             
-    def cal_cl_loss(self, user_idx, item_idx):
-        u_idx = torch.unique(user_idx).to(self.device)
-        i_idx = torch.unique(item_idx).to(self.device)
-        user_view_1, item_view_1 = self.gcn(self.user_embed, self.item_embed, edge_dropout=True, mess_dropout=True)
-        user_view_2, item_view_2 = self.gcn(self.user_embed, self.item_embed, edge_dropout=True, mess_dropout=True)
-        user_cl_loss = self.InfoNCE(user_view_1[u_idx], user_view_2[u_idx], self.temperature)
-        item_cl_loss = self.InfoNCE(item_view_1[i_idx], item_view_2[i_idx], self.temperature)
+    
+            
+    def cal_cl_loss(self, user_gcn_emb, item_gcn_emb, user_idx, item_idx):
+        
+        user_view_1, item_view_1 = self.gcn(self.user_embed,
+                                              self.item_embed,
+                                              edge_dropout=True,
+                                              mess_dropout=True,
+                                              perturb=True)
+        user_view_2, item_view_2 = self.gcn(self.user_embed,
+                                              self.item_embed,
+                                              edge_dropout=True,
+                                              mess_dropout=True,
+                                              perturb=True)
+        user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
+                  
+        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], 0.5)
+        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], 0.5)
         return user_cl_loss + item_cl_loss
 
 

@@ -15,35 +15,6 @@ sys.path.append("..")
 from utils import losses
 from scipy.special import lambertw
 
-"""
-https://dl.acm.org/doi/abs/10.1145/3459637.3481952
-Self-supervised Learning for Large-scale Item Recommendations
-"""
-class SelfSupervisedLoss(nn.Module):
-    def __init__(self, temperature=0.1):
-        super(SelfSupervisedLoss, self).__init__()
-        self.temperature = temperature
-
-    def forward(self, user_embed, pos_embed):
-        pos_score = torch.matmul(user_embed, pos_embed.t()) / self.temperature
-        pos_score = torch.exp(pos_score)
-        pos_score = pos_score / torch.sum(pos_score, dim=1, keepdim=True)
-
-        user_self_score = torch.matmul(user_embed, user_embed.t()) / self.temperature
-        item_self_score = torch.matmul(pos_embed, pos_embed.t()) / self.temperature
-
-        user_self_score = torch.exp(user_self_score)
-        item_self_score = torch.exp(item_self_score)
-
-        user_self_score = user_self_score / torch.sum(user_self_score, dim=1, keepdim=True)
-        item_self_score = item_self_score / torch.sum(item_self_score, dim=1, keepdim=True)
-
-        loss = -torch.mean(torch.log(torch.diag(pos_score))) \
-               -torch.mean(torch.log(torch.diag(user_self_score))) \
-               -torch.mean(torch.log(torch.diag(item_self_score)))
-
-        return loss
-
 class GraphConv(nn.Module):
     """
     Graph Convolutional Network
@@ -96,7 +67,7 @@ class GraphConv(nn.Module):
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
-        return embs[:self.n_users, :], embs[self.n_users:, :]
+        return embs[:self.n_users, :], embs[self.n_users:, :], embs
 
 class lgn_tau_frame(nn.Module):
     def __init__(self, data_config, args_config, adj_mat, logger=None):
@@ -136,9 +107,6 @@ class lgn_tau_frame(nn.Module):
         self.loss_name = args_config.loss_fn
     
         self.generate_mode = args_config.generate_mode
-        
-        self.lamda = 1.0
-        self.self_supervised_loss = SelfSupervisedLoss(temperature=5.0)
 
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
@@ -154,6 +122,10 @@ class lgn_tau_frame(nn.Module):
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
+        
+        self.hyper_layers = 1
+        self.ssl_reg = 1e-5
+        self.alpha = 1.5
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -210,7 +182,7 @@ class lgn_tau_frame(nn.Module):
     def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
                                               mess_dropout=self.mess_dropout)
@@ -220,7 +192,7 @@ class lgn_tau_frame(nn.Module):
             tau_user = self._loss_to_tau(loss_per_user, w_0)
             self._update_tau_memory(tau_user)
         if self.sampling_method == "no_sample":
-            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, w_0)
+            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], embs, user, pos_item, w_0)
         else:
             neg_item = batch['neg_items']
             return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
@@ -238,7 +210,7 @@ class lgn_tau_frame(nn.Module):
             return embeddings[:, -1, :]
 
     def gcn_emb(self):
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
                                               mess_dropout=False)
@@ -246,7 +218,7 @@ class lgn_tau_frame(nn.Module):
         return user_gcn_emb.detach(), item_gcn_emb.detach()
 
     def generate(self, mode='test', split=True):
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
                                               mess_dropout=False)
@@ -264,6 +236,35 @@ class lgn_tau_frame(nn.Module):
             return user_gcn_emb, item_gcn_emb
         else:
             return torch.cat([user_gcn_emb, item_gcn_emb], dim=0)
+        
+    def ssl_layer_loss(self, context_emb, initial_emb, user, item):
+        print(context_emb.shape)
+        context_user_emb_all, context_item_emb_all = torch.split(context_emb, [self.n_users, self.n_items])
+        initial_user_emb_all, initial_item_emb_all = torch.split(initial_emb, [self.n_users, self.n_items])
+        context_user_emb = context_user_emb_all[user]
+        initial_user_emb = initial_user_emb_all[user]
+        norm_user_emb1 = F.normalize(context_user_emb)
+        norm_user_emb2 = F.normalize(initial_user_emb)
+        norm_all_user_emb = F.normalize(initial_user_emb_all)
+        pos_score_user = torch.mul(norm_user_emb1, norm_user_emb2).sum(dim=1)
+        ttl_score_user = torch.matmul(norm_user_emb1, norm_all_user_emb.transpose(0, 1))
+        pos_score_user = torch.exp(pos_score_user / self.temperature)
+        ttl_score_user = torch.exp(ttl_score_user / self.temperature).sum(dim=1)
+        ssl_loss_user = -torch.log(pos_score_user / ttl_score_user).sum()
+
+        context_item_emb = context_item_emb_all[item]
+        initial_item_emb = initial_item_emb_all[item]
+        norm_item_emb1 = F.normalize(context_item_emb)
+        norm_item_emb2 = F.normalize(initial_item_emb)
+        norm_all_item_emb = F.normalize(initial_item_emb_all)
+        pos_score_item = torch.mul(norm_item_emb1, norm_item_emb2).sum(dim=1)
+        ttl_score_item = torch.matmul(norm_item_emb1, norm_all_item_emb.transpose(0, 1))
+        pos_score_item = torch.exp(pos_score_item / self.temperature)
+        ttl_score_item = torch.exp(ttl_score_item / self.temperature).sum(dim=1)
+        ssl_loss_item = -torch.log(pos_score_item / ttl_score_item).sum()
+
+        ssl_loss = self.ssl_reg * (ssl_loss_user + self.alpha * ssl_loss_item)
+        return ssl_loss
 
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
@@ -300,11 +301,14 @@ class lgn_tau_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 
 
-    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, w_0=None):
+    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, embs, user, pos_item, w_0=None):
         batch_size = user_gcn_emb.shape[0]
         u_e = self.pooling(user_gcn_emb)  # [B, F]
         pos_e = self.pooling(pos_gcn_emb) # [B, F]
-
+        emb_list = embs.transpose(0, 1)
+        initial_emb = emb_list[0]
+        context_emb = emb_list[self.hyper_layers*2]
+        ssl_loss = self.ssl_layer_loss(context_emb,initial_emb,user,pos_item)
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
         if self.i_norm:
@@ -319,33 +323,12 @@ class lgn_tau_frame(nn.Module):
         regularize = (torch.norm(user_gcn_emb[:, :]) ** 2
                        + torch.norm(pos_gcn_emb[:, :]) ** 2) / 2  # take hop=0
         emb_loss = self.decay * regularize / batch_size
-        
-        # Calculate self-supervised loss
-        ssl_loss = self.lamda * self.self_supervised_loss(u_e, pos_e)
-        
-        """
-        https://arxiv.org/pdf/2010.14395
-        Contrastive Learning for Sequential Recommendation
-        """
-        # Feature augmentation
-        aug_pos_e = pos_e + 0.05 * torch.randn_like(pos_e)
-        aug_u_e = u_e + 0.05 * torch.randn_like(u_e)
-
-        pos_sim = F.cosine_similarity(u_e, pos_e, dim=-1)
-        aug_pos_sim = F.cosine_similarity(aug_u_e, aug_pos_e, dim=-1)
-
-        # Calculate the numerator and denominator
-        numerator = torch.exp(pos_sim)
-        denominator = torch.exp(pos_sim) + torch.exp(aug_pos_sim)
-
-        loss = -torch.log(numerator / denominator)
-        total_contrastive_loss = loss.mean() * 3
 
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + ssl_loss + total_contrastive_loss, loss_, emb_loss, tau, ssl_loss + total_contrastive_loss
+            return loss.mean() + emb_loss + ssl_loss, loss_, emb_loss, tau, ssl_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

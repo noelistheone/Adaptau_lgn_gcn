@@ -105,7 +105,6 @@ class lgn_tau_cf_frame(nn.Module):
         self.item_embed = nn.Parameter(self.item_embed)
        
         self.loss_name = args_config.loss_fn
-    
         self.generate_mode = args_config.generate_mode
 
         if args_config.loss_fn == "Adap_tau_Loss":
@@ -122,6 +121,9 @@ class lgn_tau_cf_frame(nn.Module):
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
+        self.eps = 0.1
+        
+        self.predictor = nn.Linear(self.emb_size, self.emb_size)
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -141,6 +143,25 @@ class lgn_tau_cf_frame(nn.Module):
         i = torch.LongTensor([coo.row, coo.col])
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
+    
+    def augment_embeddings(self, embeddings, rate=0.1):
+        noise = torch.randn_like(embeddings) * rate
+        return embeddings + torch.sign(embeddings) * F.normalize(noise, dim=-1) * rate
+
+    def dropout(self, x, rate=0.5):
+        noise_shape = x._nnz()
+
+        random_tensor = rate
+        random_tensor += torch.rand(noise_shape).to(x.device)
+        dropout_mask = torch.floor(random_tensor).type(torch.bool)
+        i = x._indices()
+        v = x._values()
+
+        i = i[:, dropout_mask]
+        v = v[dropout_mask]
+
+        out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
+        return out * (1. / (1 - rate))
 
     def _update_tau_memory(self, x):
         # x: std [B]
@@ -188,7 +209,7 @@ class lgn_tau_cf_frame(nn.Module):
             tau_user = self._loss_to_tau(loss_per_user, w_0)
             self._update_tau_memory(tau_user)
         if self.sampling_method == "no_sample":
-            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, w_0)
+            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, pos_item, w_0)
         else:
             neg_item = batch['neg_items']
             return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
@@ -237,13 +258,12 @@ class lgn_tau_cf_frame(nn.Module):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
     
     def loss_fn1(self, p, z):  # negative cosine similarity
+        
         return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
 
-    def calculate_cf_loss(self, u_online, u_target, i_online, i_target, batch_size):
+    def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
         
-        
-
-        
+        # u_online, i_online = self.predictor(u_online), self.predictor(i_online)
 
         loss_ui = self.loss_fn1(u_online, i_target)/2
         loss_iu = self.loss_fn1(i_online, u_target)/2
@@ -282,20 +302,31 @@ class lgn_tau_cf_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 
 
-    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, w_0=None):
+    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, pos_item, w_0=None):
         batch_size = user_gcn_emb.shape[0]
+        
         
         u_e = self.pooling(user_gcn_emb)  # [B, F]
         pos_e = self.pooling(pos_gcn_emb) # [B, F]
+        u_target = u_e.clone()
+        i_target = pos_e.clone()
+        u_target.detach()
+        i_target.detach()
+        u_target = F.dropout(u_e, 0.1)
+        i_target = F.dropout(pos_e, 0.1)
+        # u_target = self.augment_embeddings(u_target)
+        # i_target = self.augment_embeddings(i_target)
+        
+        cf_loss = 1e-1 * self.calculate_cf_loss(u_e, pos_e, u_target, i_target)
 
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
         if self.i_norm:
             pos_e = F.normalize(pos_e, dim=-1)
             
-        u_aug = F.dropout(u_e, p=0.1)
-        pos_aug = F.dropout(pos_e, p=0.1)
-        cf_loss = self.calculate_cf_loss(u_e, u_aug, pos_e, pos_aug, batch_size)
+        
+        
+        
         # contrust y_pred framework
         row_swap = torch.cat([torch.arange(batch_size).long(), torch.arange(batch_size).long()]).to(self.device)
         col_before = torch.cat([torch.arange(batch_size).long(), torch.zeros(batch_size).long()]).to(self.device)
