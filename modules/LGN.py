@@ -209,7 +209,7 @@ class lgn_frame(nn.Module):
         return loss
 
 
-    def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,

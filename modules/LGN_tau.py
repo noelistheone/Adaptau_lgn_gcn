@@ -14,6 +14,7 @@ import sys
 sys.path.append("..")
 from utils import losses
 from scipy.special import lambertw
+import faiss
 
 class GraphConv(nn.Module):
     """
@@ -79,9 +80,11 @@ class lgn_tau_frame(nn.Module):
 
         self.decay = args_config.l2
         self.emb_size = args_config.dim
+        self.k = 2000
         self.context_hops = args_config.context_hops
         self.mess_dropout = args_config.mess_dropout
         self.mess_dropout_rate = args_config.mess_dropout_rate
+        self.batch_size = args_config.batch_size
         self.logger = logger
         if self.mess_dropout:
             self.dropout = nn.Dropout(args_config.mess_dropout_rate)
@@ -124,14 +127,25 @@ class lgn_tau_frame(nn.Module):
         self.sampling_method = args_config.sampling_method
         
         self.hyper_layers = 1
-        self.ssl_reg = 1e-5
+        self.ssl_reg = 1e-6
         self.alpha = 1.5
+        
+        self.user_centroids = None
+        self.user_2cluster = None
+        self.item_centroids = None
+        self.item_2cluster = None
+        
+        self.epoch = 0
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
         self.user_embed = initializer(torch.empty(self.n_users, self.emb_size))
         self.item_embed = initializer(torch.empty(self.n_items, self.emb_size))
         self.sparse_norm_adj = self._convert_sp_mat_to_sp_tensor(self.adj_mat).to(self.device)
+        self.embedding_dict = nn.ParameterDict({
+            'user_emb': nn.Parameter(initializer(torch.empty(self.n_users, self.emb_size))),
+            'item_emb': nn.Parameter(initializer(torch.empty(self.n_users, self.emb_size))),
+        })
 
     def _init_model(self):
         return GraphConv(n_hops=self.context_hops,
@@ -145,6 +159,12 @@ class lgn_tau_frame(nn.Module):
         i = torch.LongTensor([coo.row, coo.col])
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
+    
+    def e_step(self):
+        user_embeddings = self.embedding_dict['user_emb'].detach().cpu().numpy()
+        item_embeddings = self.embedding_dict['item_emb'].detach().cpu().numpy()
+        self.user_centroids, self.user_2cluster = self.run_kmeans(user_embeddings)
+        self.item_centroids, self.item_2cluster = self.run_kmeans(item_embeddings)
 
     def _update_tau_memory(self, x):
         # x: std [B]
@@ -179,13 +199,17 @@ class lgn_tau_frame(nn.Module):
                 tau = (t_0 * torch.exp(-laberw_data)).detach()
         return tau
 
-    def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
         user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
                                               mess_dropout=self.mess_dropout)
+        self.epoch = epoch
+        
+        if self.epoch >= 20:
+            self.e_step()
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
@@ -196,6 +220,54 @@ class lgn_tau_frame(nn.Module):
         else:
             neg_item = batch['neg_items']
             return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
+        
+    def run_kmeans(self, x):
+        """Run K-means algorithm to get k clusters of the input tensor x        """
+        kmeans = faiss.Kmeans(d=self.emb_size, k=self.k, gpu=True)
+        kmeans.train(x)
+        cluster_cents = kmeans.centroids
+        _, I = kmeans.index.search(x, 1)
+        # convert to cuda Tensors for broadcast
+        centroids = torch.Tensor(cluster_cents).cuda()
+        node2cluster = torch.LongTensor(I).squeeze().cuda()
+        return centroids, node2cluster
+    
+    def InfoNCE(self, view1, view2, temperature: float, b_cos: bool = True):
+        """
+        Args:
+            view1: (torch.Tensor - N x D)
+            view2: (torch.Tensor - N x D)
+            temperature: float
+            b_cos (bool)
+
+        Return: Average InfoNCE Loss
+        """
+        # view1 = self.pooling(view1)
+        # view2 = self.pooling(view2)
+        if b_cos:
+            view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
+
+        pos_score = (view1 @ view2.T) / temperature
+        score = torch.diag(F.log_softmax(pos_score, dim=1))
+        return -score.mean()
+        # F.normalize(view2, dim=1)
+        # pos_score = (view1 * view2).sum(dim=-1)
+        # pos_score = torch.exp(pos_score / temperature)
+        # ttl_score = torch.matmul(view1, view2.transpose(0, 1))
+        # ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
+        # cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
+        # return torch.mean(cl_loss)
+    
+    def ProtoNCE_loss(self, initial_emb, user_idx, item_idx):
+        user_emb, item_emb = torch.split(initial_emb, [self.n_users, self.n_items])
+        user2cluster = self.user_2cluster[user_idx]
+        user2centroids = self.user_centroids[user2cluster]
+        proto_nce_loss_user = self.InfoNCE(user_emb[user_idx],user2centroids,self.temperature) * self.batch_size
+        item2cluster = self.item_2cluster[item_idx]
+        item2centroids = self.item_centroids[item2cluster]
+        proto_nce_loss_item = self.InfoNCE(item_emb[item_idx],item2centroids,self.temperature) * self.batch_size
+        proto_nce_loss = self.proto_reg * (proto_nce_loss_user + proto_nce_loss_item)
+        return proto_nce_loss
        
 
     def pooling(self, embeddings):
@@ -308,7 +380,11 @@ class lgn_tau_frame(nn.Module):
         emb_list = embs.transpose(0, 1)
         initial_emb = emb_list[0]
         context_emb = emb_list[self.hyper_layers*2]
-        ssl_loss = self.ssl_layer_loss(context_emb,initial_emb,user,pos_item)
+        ssl_loss = self.ssl_layer_loss(context_emb,initial_emb, user, pos_item)
+        if self.epoch >= 20:
+            proto_loss = self.ProtoNCE_loss(initial_emb, user, pos_item)
+        else:
+            proto_loss = 0
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
         if self.i_norm:
@@ -328,7 +404,8 @@ class lgn_tau_frame(nn.Module):
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-            return loss.mean() + emb_loss + ssl_loss, loss_, emb_loss, tau, ssl_loss
+                
+            return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_, emb_loss, tau, ssl_loss + proto_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

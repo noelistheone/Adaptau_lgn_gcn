@@ -295,7 +295,7 @@ if __name__ == '__main__':
                                       s, s + args.batch_size,
                                       n_negs)
 
-                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, epoch=epoch, w_0=w_0, s=s)
                 
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())

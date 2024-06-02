@@ -196,7 +196,7 @@ class lgn_tau_cf_frame(nn.Module):
                 tau = (t_0 * torch.exp(-laberw_data)).detach()
         return tau
 
-    def forward(self, batch=None, loss_per_user=None, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
@@ -317,7 +317,7 @@ class lgn_tau_cf_frame(nn.Module):
         # u_target = self.augment_embeddings(u_target)
         # i_target = self.augment_embeddings(i_target)
         
-        cf_loss = 1e-1 * self.calculate_cf_loss(u_e, pos_e, u_target, i_target)
+        cf_loss = 1e-2 * self.calculate_cf_loss(u_e, pos_e, u_target, i_target)
 
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
