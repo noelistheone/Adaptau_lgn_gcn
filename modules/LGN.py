@@ -291,16 +291,16 @@ class lgn_frame(nn.Module):
         if b_cos:
             view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
 
-#         pos_score = (view1 @ view2.T) / temperature
-#         score = torch.diag(F.log_softmax(pos_score, dim=1))
-#         return -score.mean()
-        F.normalize(view2, dim=1)
-        pos_score = (view1 * view2).sum(dim=-1)
-        pos_score = torch.exp(pos_score / temperature)
-        ttl_score = torch.matmul(view1, view2.transpose(0, 1))
-        ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
-        cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
-        return torch.mean(cl_loss)
+        pos_score = (view1 @ view2.T) / temperature
+        score = torch.diag(F.log_softmax(pos_score, dim=1))
+        return -score.mean()
+        # F.normalize(view2, dim=1)
+        # pos_score = (view1 * view2).sum(dim=-1)
+        # pos_score = torch.exp(pos_score / temperature)
+        # ttl_score = torch.matmul(view1, view2.transpose(0, 1))
+        # ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
+        # cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
+        # return torch.mean(cl_loss)
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -339,18 +339,18 @@ class lgn_frame(nn.Module):
         
         user_view_1, item_view_1 = self.gcn(self.user_embed,
                                               self.item_embed,
-                                              edge_dropout=True,
-                                              mess_dropout=True,
+                                              edge_dropout=False,
+                                              mess_dropout=False,
                                               perturb=True)
         user_view_2, item_view_2 = self.gcn(self.user_embed,
                                               self.item_embed,
-                                              edge_dropout=True,
-                                              mess_dropout=True,
+                                              edge_dropout=False,
+                                              mess_dropout=False,
                                               perturb=True)
         user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
                   
-        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], 0.5)
-        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], 0.5)
+        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], self.temperature)
+        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], self.temperature)
         return user_cl_loss + item_cl_loss
 
 

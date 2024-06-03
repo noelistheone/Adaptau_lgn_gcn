@@ -5,6 +5,7 @@ Created on March 1st, 2023
 '''
 from tarfile import POSIX_MAGIC
 from numpy.core.fromnumeric import size
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -80,7 +81,7 @@ class lgn_tau_frame(nn.Module):
 
         self.decay = args_config.l2
         self.emb_size = args_config.dim
-        self.k = 2000
+        self.k = 600
         self.context_hops = args_config.context_hops
         self.mess_dropout = args_config.mess_dropout
         self.mess_dropout_rate = args_config.mess_dropout_rate
@@ -129,6 +130,7 @@ class lgn_tau_frame(nn.Module):
         self.hyper_layers = 1
         self.ssl_reg = 1e-6
         self.alpha = 1.5
+        self.proto_reg = 1e-7
         
         self.user_centroids = None
         self.user_2cluster = None
@@ -223,7 +225,7 @@ class lgn_tau_frame(nn.Module):
         
     def run_kmeans(self, x):
         """Run K-means algorithm to get k clusters of the input tensor x        """
-        kmeans = faiss.Kmeans(d=self.emb_size, k=self.k, gpu=True)
+        kmeans = faiss.Kmeans(d=self.emb_size, k=self.k, gpu=False)
         kmeans.train(x)
         cluster_cents = kmeans.centroids
         _, I = kmeans.index.search(x, 1)
@@ -310,7 +312,7 @@ class lgn_tau_frame(nn.Module):
             return torch.cat([user_gcn_emb, item_gcn_emb], dim=0)
         
     def ssl_layer_loss(self, context_emb, initial_emb, user, item):
-        print(context_emb.shape)
+        # print(context_emb.shape)
         context_user_emb_all, context_item_emb_all = torch.split(context_emb, [self.n_users, self.n_items])
         initial_user_emb_all, initial_item_emb_all = torch.split(initial_emb, [self.n_users, self.n_items])
         context_user_emb = context_user_emb_all[user]
@@ -381,10 +383,10 @@ class lgn_tau_frame(nn.Module):
         initial_emb = emb_list[0]
         context_emb = emb_list[self.hyper_layers*2]
         ssl_loss = self.ssl_layer_loss(context_emb,initial_emb, user, pos_item)
+        proto_loss = 0
         if self.epoch >= 20:
             proto_loss = self.ProtoNCE_loss(initial_emb, user, pos_item)
-        else:
-            proto_loss = 0
+        
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
         if self.i_norm:

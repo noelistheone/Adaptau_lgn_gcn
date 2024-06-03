@@ -106,6 +106,7 @@ class lgn_tau_cf_frame(nn.Module):
        
         self.loss_name = args_config.loss_fn
         self.generate_mode = args_config.generate_mode
+        self.dropout = nn.Dropout(p=mess_dropout_rate) 
 
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
@@ -263,7 +264,7 @@ class lgn_tau_cf_frame(nn.Module):
 
     def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
         
-        # u_online, i_online = self.predictor(u_online), self.predictor(i_online)
+        u_online, i_online = self.predictor(u_online), self.predictor(i_online)
 
         loss_ui = self.loss_fn1(u_online, i_target)/2
         loss_iu = self.loss_fn1(i_online, u_target)/2
@@ -312,8 +313,8 @@ class lgn_tau_cf_frame(nn.Module):
         i_target = pos_e.clone()
         u_target.detach()
         i_target.detach()
-        u_target = F.dropout(u_e, 0.1)
-        i_target = F.dropout(pos_e, 0.1)
+        u_target = self.dropout(u_e)
+        i_target = self.dropout(pos_e)
         # u_target = self.augment_embeddings(u_target)
         # i_target = self.augment_embeddings(i_target)
         
