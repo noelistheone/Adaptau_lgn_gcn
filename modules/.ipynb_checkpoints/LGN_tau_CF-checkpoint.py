@@ -67,7 +67,7 @@ class GraphConv(nn.Module):
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
-        return embs[:self.n_users, :], embs[self.n_users:, :]
+        return embs[:self.n_users, :], embs[self.n_users:, :], embs
 
 class lgn_tau_cf_frame(nn.Module):
     def __init__(self, data_config, args_config, adj_mat, logger=None):
@@ -106,7 +106,7 @@ class lgn_tau_cf_frame(nn.Module):
        
         self.loss_name = args_config.loss_fn
         self.generate_mode = args_config.generate_mode
-        self.dropout = nn.Dropout(p=mess_dropout_rate) 
+       
 
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
@@ -200,7 +200,7 @@ class lgn_tau_cf_frame(nn.Module):
     def forward(self, batch=None, loss_per_user=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
                                               mess_dropout=self.mess_dropout)
@@ -228,7 +228,7 @@ class lgn_tau_cf_frame(nn.Module):
             return embeddings[:, -1, :]
 
     def gcn_emb(self):
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
                                               mess_dropout=False)
@@ -236,7 +236,7 @@ class lgn_tau_cf_frame(nn.Module):
         return user_gcn_emb.detach(), item_gcn_emb.detach()
 
     def generate(self, mode='test', split=True):
-        user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
                                               mess_dropout=False)
@@ -313,8 +313,8 @@ class lgn_tau_cf_frame(nn.Module):
         i_target = pos_e.clone()
         u_target.detach()
         i_target.detach()
-        u_target = self.dropout(u_e)
-        i_target = self.dropout(pos_e)
+        u_target = F.dropout(u_e, p=0.3)
+        i_target = F.dropout(pos_e, p=0.3)
         # u_target = self.augment_embeddings(u_target)
         # i_target = self.augment_embeddings(i_target)
         

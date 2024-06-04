@@ -49,7 +49,7 @@ class GraphConv(nn.Module):
         return out * (1. / (1 - rate))
 
     def forward(self, user_embed, item_embed,
-                mess_dropout=True, edge_dropout=True):
+                mess_dropout=True, edge_dropout=True, perturb=False):
         # user_embed: [n_users, channel]
         # item_embed: [n_items, channel]
 
@@ -66,11 +66,14 @@ class GraphConv(nn.Module):
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
+            if perturb:
+                random_noise = torch.rand_like(agg_embed).cuda()
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.1
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
         return embs[:self.n_users, :], embs[self.n_users:, :], embs
-
+    
 class lgn_tau_frame(nn.Module):
     def __init__(self, data_config, args_config, adj_mat, logger=None):
         super(lgn_tau_frame, self).__init__()
@@ -81,11 +84,12 @@ class lgn_tau_frame(nn.Module):
 
         self.decay = args_config.l2
         self.emb_size = args_config.dim
-        self.k = 600
+        self.k = 1000
+        # self.k = self.n_users // 40
         self.context_hops = args_config.context_hops
         self.mess_dropout = args_config.mess_dropout
         self.mess_dropout_rate = args_config.mess_dropout_rate
-        self.batch_size = args_config.batch_size
+        self.batch_size = 2048
         self.logger = logger
         if self.mess_dropout:
             self.dropout = nn.Dropout(args_config.mess_dropout_rate)
@@ -132,22 +136,21 @@ class lgn_tau_frame(nn.Module):
         self.alpha = 1.5
         self.proto_reg = 1e-7
         
+        self.predictor = nn.Linear(self.emb_size, self.emb_size)
+        
+        self.epoch = 0
+        
         self.user_centroids = None
         self.user_2cluster = None
         self.item_centroids = None
         self.item_2cluster = None
-        
-        self.epoch = 0
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
         self.user_embed = initializer(torch.empty(self.n_users, self.emb_size))
         self.item_embed = initializer(torch.empty(self.n_items, self.emb_size))
         self.sparse_norm_adj = self._convert_sp_mat_to_sp_tensor(self.adj_mat).to(self.device)
-        self.embedding_dict = nn.ParameterDict({
-            'user_emb': nn.Parameter(initializer(torch.empty(self.n_users, self.emb_size))),
-            'item_emb': nn.Parameter(initializer(torch.empty(self.n_users, self.emb_size))),
-        })
+        
 
     def _init_model(self):
         return GraphConv(n_hops=self.context_hops,
@@ -162,11 +165,7 @@ class lgn_tau_frame(nn.Module):
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
     
-    def e_step(self):
-        user_embeddings = self.embedding_dict['user_emb'].detach().cpu().numpy()
-        item_embeddings = self.embedding_dict['item_emb'].detach().cpu().numpy()
-        self.user_centroids, self.user_2cluster = self.run_kmeans(user_embeddings)
-        self.item_centroids, self.item_2cluster = self.run_kmeans(item_embeddings)
+    
 
     def _update_tau_memory(self, x):
         # x: std [B]
@@ -210,8 +209,8 @@ class lgn_tau_frame(nn.Module):
                                               mess_dropout=self.mess_dropout)
         self.epoch = epoch
         
-        if self.epoch >= 20:
-            self.e_step()
+        # if self.epoch >= 20:
+        #     self.e_step()
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
@@ -223,16 +222,7 @@ class lgn_tau_frame(nn.Module):
             neg_item = batch['neg_items']
             return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
         
-    def run_kmeans(self, x):
-        """Run K-means algorithm to get k clusters of the input tensor x        """
-        kmeans = faiss.Kmeans(d=self.emb_size, k=self.k, gpu=False)
-        kmeans.train(x)
-        cluster_cents = kmeans.centroids
-        _, I = kmeans.index.search(x, 1)
-        # convert to cuda Tensors for broadcast
-        centroids = torch.Tensor(cluster_cents).cuda()
-        node2cluster = torch.LongTensor(I).squeeze().cuda()
-        return centroids, node2cluster
+    
     
     def InfoNCE(self, view1, view2, temperature: float, b_cos: bool = True):
         """
@@ -260,16 +250,23 @@ class lgn_tau_frame(nn.Module):
         # cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
         # return torch.mean(cl_loss)
     
-    def ProtoNCE_loss(self, initial_emb, user_idx, item_idx):
-        user_emb, item_emb = torch.split(initial_emb, [self.n_users, self.n_items])
-        user2cluster = self.user_2cluster[user_idx]
-        user2centroids = self.user_centroids[user2cluster]
-        proto_nce_loss_user = self.InfoNCE(user_emb[user_idx],user2centroids,self.temperature) * self.batch_size
-        item2cluster = self.item_2cluster[item_idx]
-        item2centroids = self.item_centroids[item2cluster]
-        proto_nce_loss_item = self.InfoNCE(item_emb[item_idx],item2centroids,self.temperature) * self.batch_size
-        proto_nce_loss = self.proto_reg * (proto_nce_loss_user + proto_nce_loss_item)
-        return proto_nce_loss
+    def cal_cl_loss(self, user_idx, item_idx):
+        
+        user_view_1, item_view_1, emb1 = self.gcn(self.user_embed,
+                                              self.item_embed,
+                                              edge_dropout=False,
+                                              mess_dropout=False,
+                                              perturb=True)
+        user_view_2, item_view_2, emb2 = self.gcn(self.user_embed,
+                                              self.item_embed,
+                                              edge_dropout=False,
+                                              mess_dropout=False,
+                                              perturb=True)
+        user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
+                  
+        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], self.temperature)
+        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], self.temperature)
+        return user_cl_loss + item_cl_loss
        
 
     def pooling(self, embeddings):
@@ -290,6 +287,57 @@ class lgn_tau_frame(nn.Module):
                                               mess_dropout=False)
         user_gcn_emb, item_gcn_emb = self.pooling(user_gcn_emb), self.pooling(item_gcn_emb)
         return user_gcn_emb.detach(), item_gcn_emb.detach()
+    
+    def e_step(self):
+        user_embeddings = self.user_embed.detach().cpu().numpy()
+        item_embeddings = self.item_embed.detach().cpu().numpy()
+        self.user_centroids, self.user_2cluster = self.run_kmeans(user_embeddings)
+        self.item_centroids, self.item_2cluster = self.run_kmeans(item_embeddings)
+
+    def run_kmeans(self, x):
+        """Run K-means algorithm to get k clusters of the input tensor x
+        """
+        kmeans = faiss.Kmeans(d=self.emb_size, k=self.k, gpu=False)
+        kmeans.train(x)
+        cluster_cents = kmeans.centroids
+
+        _, I = kmeans.index.search(x, 1)
+
+        # convert to cuda Tensors for broadcast
+        centroids = torch.Tensor(cluster_cents).to(self.device)
+        centroids = F.normalize(centroids, p=2, dim=1)
+
+        node2cluster = torch.LongTensor(I).squeeze().to(self.device)
+        return centroids, node2cluster
+    
+    def ProtoNCE_loss(self, node_embedding, user, item):
+        user_embeddings_all, item_embeddings_all = torch.split(node_embedding, [self.n_users, self.n_items])
+
+        user_embeddings = user_embeddings_all[user]     # [B, e]
+        norm_user_embeddings = F.normalize(user_embeddings)
+
+        user2cluster = self.user_2cluster[user]     # [B,]
+        user2centroids = self.user_centroids[user2cluster]   # [B, e]
+        pos_score_user = torch.mul(norm_user_embeddings, user2centroids).sum(dim=1)
+        pos_score_user = torch.exp(pos_score_user / self.temperature)
+        ttl_score_user = torch.matmul(norm_user_embeddings, self.user_centroids.transpose(0, 1))
+        ttl_score_user = torch.exp(ttl_score_user / self.temperature).sum(dim=1)
+
+        proto_nce_loss_user = -torch.log(pos_score_user / ttl_score_user).sum()
+
+        item_embeddings = item_embeddings_all[item]
+        norm_item_embeddings = F.normalize(item_embeddings)
+
+        item2cluster = self.item_2cluster[item]  # [B, ]
+        item2centroids = self.item_centroids[item2cluster]  # [B, e]
+        pos_score_item = torch.mul(norm_item_embeddings, item2centroids).sum(dim=1)
+        pos_score_item = torch.exp(pos_score_item / self.temperature)
+        ttl_score_item = torch.matmul(norm_item_embeddings, self.item_centroids.transpose(0, 1))
+        ttl_score_item = torch.exp(ttl_score_item / self.temperature).sum(dim=1)
+        proto_nce_loss_item = -torch.log(pos_score_item / ttl_score_item).sum()
+
+        proto_nce_loss = self.proto_reg * (proto_nce_loss_user + proto_nce_loss_item)
+        return proto_nce_loss
 
     def generate(self, mode='test', split=True):
         user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
@@ -342,6 +390,19 @@ class lgn_tau_frame(nn.Module):
 
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
+    
+    def loss_fn1(self, p, z):  # negative cosine similarity
+        
+        return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
+
+    def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
+        
+        u_online, i_online = self.predictor(u_online), self.predictor(i_online)
+
+        loss_ui = self.loss_fn1(u_online, i_target)/2
+        loss_iu = self.loss_fn1(i_online, u_target)/2
+
+        return loss_ui + loss_iu
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):

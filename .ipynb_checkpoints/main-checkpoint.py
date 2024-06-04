@@ -18,6 +18,7 @@ from utils.data_loader import load_data
 from utils.evaluate import test_sp
 import torch.nn.functional as F
 import os.path as osp
+
 n_users = 0
 n_items = 0
 def get_logger(name, log_dir, config_dir):
@@ -46,6 +47,7 @@ def get_logger(name, log_dir, config_dir):
     logger.addHandler(consoleHandler)
 
     return logger
+
 
 class Sample(object):
     def __init__(self, user_dict, n_users, n_items, sampling_method="uniform", train_cf = None):
@@ -287,7 +289,11 @@ if __name__ == '__main__':
                 w_0 = ( - b - np.sqrt(np.clip(b ** 2 - a*c , 0, 100000))) / a
                 logger.info("current w_0 is {}".format(w_0))
                     # loss_per_user = scatter(losses_train, train_cf_[:, 0], dim=0, reduce='mean')
-
+            if epoch >= 20:
+                if args.gnn == "lgntau":
+                    model.e_step()
+            
+                
             while s + args.batch_size <= len(train_cf):
                 # print('Step: {}'.format(s))
                 batch = sample.get_feed_dict(train_cf_,

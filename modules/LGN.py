@@ -66,7 +66,7 @@ class GraphConv(nn.Module):
                 agg_embed = self.dropout(agg_embed)
             if perturb:
                 random_noise = torch.rand_like(agg_embed).cuda()
-                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.05
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.1
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
@@ -102,6 +102,21 @@ class lgn_frame(nn.Module):
         self.u_norm = args_config.u_norm
         self.i_norm = args_config.i_norm
         self.tau_mode = args_config.tau_mode
+        
+        self.user_tower = nn.Sequential(
+            nn.Linear(self.emb_size, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 128),
+            nn.Tanh()
+        )
+        self.item_tower = nn.Sequential(
+            nn.Linear(self.emb_size, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 128),
+            nn.Tanh()
+        )
+        self.dropout_rate = 0.1
+        self.dropout = nn.Dropout(self.dropout_rate)
        
         self._init_weight()
         self.user_embed = nn.Parameter(self.user_embed)
@@ -126,8 +141,8 @@ class lgn_frame(nn.Module):
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
-        self.lamda = 1.0
-        self.eps = 0.1
+        self.lamda = 0.1
+        
 
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
@@ -218,7 +233,7 @@ class lgn_frame(nn.Module):
                                               mess_dropout=self.mess_dropout)
         
         # Calculate contrastive loss
-        cl_loss = self.lamda * self.cal_cl_loss(user_gcn_emb, item_gcn_emb, user, pos_item)
+        cl_loss = self.lamda * self.cal_cl_loss(user, pos_item)
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
@@ -335,23 +350,51 @@ class lgn_frame(nn.Module):
             
     
             
-    def cal_cl_loss(self, user_gcn_emb, item_gcn_emb, user_idx, item_idx):
+#     def cal_cl_loss(self, user_gcn_emb, item_gcn_emb, user_idx, item_idx):
         
-        user_view_1, item_view_1 = self.gcn(self.user_embed,
-                                              self.item_embed,
-                                              edge_dropout=False,
-                                              mess_dropout=False,
-                                              perturb=True)
-        user_view_2, item_view_2 = self.gcn(self.user_embed,
-                                              self.item_embed,
-                                              edge_dropout=False,
-                                              mess_dropout=False,
-                                              perturb=True)
-        user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
+#         user_view_1, item_view_1 = self.gcn(self.user_embed,
+#                                               self.item_embed,
+#                                               edge_dropout=False,
+#                                               mess_dropout=False,
+#                                               perturb=True)
+#         user_view_2, item_view_2 = self.gcn(self.user_embed,
+#                                               self.item_embed,
+#                                               edge_dropout=False,
+#                                               mess_dropout=False,
+#                                               perturb=True)
+#         user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
                   
-        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], self.temperature)
-        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], self.temperature)
-        return user_cl_loss + item_cl_loss
+#         user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], self.temperature)
+#         item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], self.temperature)
+#         return user_cl_loss + item_cl_loss
+
+    def user_encoding(self, x):
+        i_emb = self.user_embed[x]
+        i1_emb = self.dropout(i_emb)
+        i2_emb = self.dropout(i_emb)
+
+        i1_emb = self.user_tower(i1_emb)
+        i2_emb = self.user_tower(i2_emb)
+
+        return i1_emb, i2_emb
+    
+    def item_encoding(self, x):
+        i_emb = self.item_embed[x]
+        i1_emb = self.dropout(i_emb)
+        i2_emb = self.dropout(i_emb)
+
+        i1_emb = self.item_tower(i1_emb)
+        i2_emb = self.item_tower(i2_emb)
+
+        return i1_emb, i2_emb
+    
+    def cal_cl_loss(self, user, item):
+        user_view_1, user_view_2 = self.user_encoding(user)
+        item_view_1, item_view_2 = self.item_encoding(item)   
+        user_cl_loss = self.InfoNCE(user_view_1, user_view_2, self.temperature)
+        item_cl_loss = self.InfoNCE(item_view_1, item_view_2, self.temperature)
+        cl_loss = 0.1 * user_cl_loss + item_cl_loss
+        return cl_loss
 
 
     def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, w_0=None):
