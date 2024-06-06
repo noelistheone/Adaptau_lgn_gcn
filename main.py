@@ -235,6 +235,7 @@ if __name__ == '__main__':
     if not args.restore:
         logger.info("start training ...")
         loss_per_user = None
+        loss_per_user_1 = None
         loss_per_ins = None
         # prepare for tau_0
         pos = train_cf.to(device)
@@ -254,6 +255,7 @@ if __name__ == '__main__':
             model.train()
             loss, s = 0, 0
             losses_train = []
+            losses_nce_train = []
             tau_maxs = []
             tau_mins = []
             losses_emb = []
@@ -289,7 +291,7 @@ if __name__ == '__main__':
                 w_0 = ( - b - np.sqrt(np.clip(b ** 2 - a*c , 0, 100000))) / a
                 logger.info("current w_0 is {}".format(w_0))
                     # loss_per_user = scatter(losses_train, train_cf_[:, 0], dim=0, reduce='mean')
-            if epoch >= 20:
+            if (epoch + 1) % 10 == 0:
                 if args.gnn == "lgntau":
                     model.e_step()
             
@@ -301,12 +303,13 @@ if __name__ == '__main__':
                                       s, s + args.batch_size,
                                       n_negs)
 
-                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, epoch=epoch, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, loss_per_user_1 = loss_per_user_1, epoch=epoch, w_0=w_0, s=s)
                 
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
                 losses_nce.append(nce_loss.item())
+                # losses_nce_train.append(nce_loss_)
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
@@ -320,11 +323,12 @@ if __name__ == '__main__':
                 batch = sample.get_feed_dict_reset(train_cf_,
                                       user_dict['train_user_set'],
                                       s, n_negs)
-                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss = model(batch, loss_per_user=loss_per_user, loss_per_user_1 = loss_per_user_1, epoch=epoch, w_0=w_0, s=s)
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
                 losses_nce.append(nce_loss.item())
+                # losses_nce_train.append(nce_loss_)
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
@@ -334,6 +338,8 @@ if __name__ == '__main__':
                 s += args.batch_size
             train_e_t = time.time()
             #print(losses_train.shape)
+            # losses_nce_train = torch.cat(losses_nce_train, dim=0)
+            # loss_per_user_1 = scatter(losses_nce_train, train_cf_[:, 0], dim=0, reduce='mean')
             losses_train = torch.cat(losses_train, dim=0)
             loss_per_user = scatter(losses_train, train_cf_[:, 0], dim=0, reduce='mean')
             # valid

@@ -67,3 +67,5 @@ class L2Loss(nn.Module):
         for embedding in embeddings:
             l2_loss += torch.sum(embedding**2)*0.5
         return l2_loss
+    
+

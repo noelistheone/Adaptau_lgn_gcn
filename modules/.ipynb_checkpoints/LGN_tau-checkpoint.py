@@ -84,12 +84,13 @@ class lgn_tau_frame(nn.Module):
 
         self.decay = args_config.l2
         self.emb_size = args_config.dim
-        self.k = 1000
-        # self.k = self.n_users // 40
+        
+        self.k = self.n_users // 39
         self.context_hops = args_config.context_hops
         self.mess_dropout = args_config.mess_dropout
         self.mess_dropout_rate = args_config.mess_dropout_rate
-        self.batch_size = 2048
+        self.batch_size = args_config.batch_size
+        self.cnt = args_config.cnt_lr
         self.logger = logger
         if self.mess_dropout:
             self.dropout = nn.Dropout(args_config.mess_dropout_rate)
@@ -128,13 +129,14 @@ class lgn_tau_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(args_config.loss_fn))
         
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau1", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
         self.hyper_layers = 1
-        self.ssl_reg = 1e-6
+        self.ssl_reg = 1e-7
         self.alpha = 1.5
-        self.proto_reg = 1e-7
+        self.proto_reg = 8e-8
         
         self.predictor = nn.Linear(self.emb_size, self.emb_size)
         
@@ -173,6 +175,13 @@ class lgn_tau_frame(nn.Module):
         with torch.no_grad():
             x = x.detach()
             self.memory_tau = x
+            
+    def _update_tau_memory1(self, x):
+        # x: std [B]
+        # y: update position [B]
+        with torch.no_grad():
+            x = x.detach()
+            self.memory_tau1 = x
 
     def _loss_to_tau(self, x, x_all):
         if self.tau_mode == "weight_v0":
@@ -199,8 +208,34 @@ class lgn_tau_frame(nn.Module):
                 laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
                 tau = (t_0 * torch.exp(-laberw_data)).detach()
         return tau
+    
+    def _loss_to_tau1(self, x, x_all):
+        if self.tau_mode == "weight_v0":
+            t_0 = x_all
+            tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
+        elif self.tau_mode == "weight_ratio":
+            t_0 = x_all
+            if x is None:
+                tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
+            else:
+                base_laberw = torch.quantile(x, self.temperature)
+                laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
+                                        min=-np.e ** (-1), max=1000)
+                laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
+                tau = (t_0 * torch.exp(-laberw_data)).detach()
+        elif self.tau_mode == "weight_mean":
+            t_0 = x_all
+            if x is None:
+                tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
+            else:
+                base_laberw = torch.mean(x)
+                laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
+                                        min=-np.e ** (-1), max=1000)
+                laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
+                tau = (t_0 * torch.exp(-laberw_data)).detach()
+        return tau
 
-    def forward(self, batch=None, loss_per_user=None, epoch=0, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, loss_per_user_1=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
         user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
@@ -215,7 +250,9 @@ class lgn_tau_frame(nn.Module):
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)
+            
             self._update_tau_memory(tau_user)
+            
         if self.sampling_method == "no_sample":
             return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], embs, user, pos_item, w_0)
         else:
@@ -241,32 +278,10 @@ class lgn_tau_frame(nn.Module):
 
         pos_score = (view1 @ view2.T) / temperature
         score = torch.diag(F.log_softmax(pos_score, dim=1))
-        return -score.mean()
-        # F.normalize(view2, dim=1)
-        # pos_score = (view1 * view2).sum(dim=-1)
-        # pos_score = torch.exp(pos_score / temperature)
-        # ttl_score = torch.matmul(view1, view2.transpose(0, 1))
-        # ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
-        # cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
-        # return torch.mean(cl_loss)
-    
-    def cal_cl_loss(self, user_idx, item_idx):
         
-        user_view_1, item_view_1, emb1 = self.gcn(self.user_embed,
-                                              self.item_embed,
-                                              edge_dropout=False,
-                                              mess_dropout=False,
-                                              perturb=True)
-        user_view_2, item_view_2, emb2 = self.gcn(self.user_embed,
-                                              self.item_embed,
-                                              edge_dropout=False,
-                                              mess_dropout=False,
-                                              perturb=True)
-        user_view_1, user_view_2, item_view_1, item_view_2 = self.pooling(user_view_1), self.pooling(user_view_2), self.pooling(item_view_1), self.pooling(item_view_2)
-                  
-        user_cl_loss = self.InfoNCE(user_view_1[user_idx], user_view_2[user_idx], self.temperature)
-        item_cl_loss = self.InfoNCE(item_view_1[item_idx], item_view_2[item_idx], self.temperature)
-        return user_cl_loss + item_cl_loss
+        
+        return -score.mean()
+    
        
 
     def pooling(self, embeddings):
@@ -310,32 +325,35 @@ class lgn_tau_frame(nn.Module):
         node2cluster = torch.LongTensor(I).squeeze().to(self.device)
         return centroids, node2cluster
     
-    def ProtoNCE_loss(self, node_embedding, user, item):
+    def ProtoNCE_loss(self, node_embedding, user, item, temperature):
         user_embeddings_all, item_embeddings_all = torch.split(node_embedding, [self.n_users, self.n_items])
 
         user_embeddings = user_embeddings_all[user]     # [B, e]
-        norm_user_embeddings = F.normalize(user_embeddings)
+        # norm_user_embeddings = F.normalize(user_embeddings)
 
         user2cluster = self.user_2cluster[user]     # [B,]
         user2centroids = self.user_centroids[user2cluster]   # [B, e]
-        pos_score_user = torch.mul(norm_user_embeddings, user2centroids).sum(dim=1)
-        pos_score_user = torch.exp(pos_score_user / self.temperature)
-        ttl_score_user = torch.matmul(norm_user_embeddings, self.user_centroids.transpose(0, 1))
-        ttl_score_user = torch.exp(ttl_score_user / self.temperature).sum(dim=1)
+#         pos_score_user = torch.mul(norm_user_embeddings, user2centroids).sum(dim=1)
+#         pos_score_user = torch.exp(pos_score_user / temperature.unsqueeze(1))
+#         ttl_score_user = torch.matmul(norm_user_embeddings, self.user_centroids.transpose(0, 1))
+#         ttl_score_user = torch.exp(ttl_score_user / temperature.unsqueeze(1)).sum(dim=1)
 
-        proto_nce_loss_user = -torch.log(pos_score_user / ttl_score_user).sum()
+        
+#         proto_nce_loss_user_ = -torch.log(pos_score_user / ttl_score_user)
+        proto_nce_loss_user = self.InfoNCE(user_embeddings, user2centroids, temperature.unsqueeze(1)) * self.batch_size
 
         item_embeddings = item_embeddings_all[item]
-        norm_item_embeddings = F.normalize(item_embeddings)
+        # norm_item_embeddings = F.normalize(item_embeddings)
 
         item2cluster = self.item_2cluster[item]  # [B, ]
         item2centroids = self.item_centroids[item2cluster]  # [B, e]
-        pos_score_item = torch.mul(norm_item_embeddings, item2centroids).sum(dim=1)
-        pos_score_item = torch.exp(pos_score_item / self.temperature)
-        ttl_score_item = torch.matmul(norm_item_embeddings, self.item_centroids.transpose(0, 1))
-        ttl_score_item = torch.exp(ttl_score_item / self.temperature).sum(dim=1)
-        proto_nce_loss_item = -torch.log(pos_score_item / ttl_score_item).sum()
-
+#         pos_score_item = torch.mul(norm_item_embeddings, item2centroids).sum(dim=1)
+#         pos_score_item = torch.exp(pos_score_item / temperature.unsqueeze(1))
+#         ttl_score_item = torch.matmul(norm_item_embeddings, self.item_centroids.transpose(0, 1))
+#         ttl_score_item = torch.exp(ttl_score_item / temperature.unsqueeze(1)).sum(dim=1)
+        
+#         proto_nce_loss_item_ = -torch.log(pos_score_item / ttl_score_item)
+        proto_nce_loss_item = self.InfoNCE(item_embeddings, item2centroids, temperature.unsqueeze(1)) * self.batch_size
         proto_nce_loss = self.proto_reg * (proto_nce_loss_user + proto_nce_loss_item)
         return proto_nce_loss
 
@@ -359,7 +377,7 @@ class lgn_tau_frame(nn.Module):
         else:
             return torch.cat([user_gcn_emb, item_gcn_emb], dim=0)
         
-    def ssl_layer_loss(self, context_emb, initial_emb, user, item):
+    def ssl_layer_loss(self, context_emb, initial_emb, user, item, temperature):
         # print(context_emb.shape)
         context_user_emb_all, context_item_emb_all = torch.split(context_emb, [self.n_users, self.n_items])
         initial_user_emb_all, initial_item_emb_all = torch.split(initial_emb, [self.n_users, self.n_items])
@@ -370,10 +388,12 @@ class lgn_tau_frame(nn.Module):
         norm_all_user_emb = F.normalize(initial_user_emb_all)
         pos_score_user = torch.mul(norm_user_emb1, norm_user_emb2).sum(dim=1)
         ttl_score_user = torch.matmul(norm_user_emb1, norm_all_user_emb.transpose(0, 1))
-        pos_score_user = torch.exp(pos_score_user / self.temperature)
-        ttl_score_user = torch.exp(ttl_score_user / self.temperature).sum(dim=1)
+        pos_score_user = torch.exp(pos_score_user / temperature.unsqueeze(1))
+        ttl_score_user = torch.exp(ttl_score_user / temperature.unsqueeze(1)).sum(dim=1)
+        
         ssl_loss_user = -torch.log(pos_score_user / ttl_score_user).sum()
-
+        
+        
         context_item_emb = context_item_emb_all[item]
         initial_item_emb = initial_item_emb_all[item]
         norm_item_emb1 = F.normalize(context_item_emb)
@@ -381,28 +401,19 @@ class lgn_tau_frame(nn.Module):
         norm_all_item_emb = F.normalize(initial_item_emb_all)
         pos_score_item = torch.mul(norm_item_emb1, norm_item_emb2).sum(dim=1)
         ttl_score_item = torch.matmul(norm_item_emb1, norm_all_item_emb.transpose(0, 1))
-        pos_score_item = torch.exp(pos_score_item / self.temperature)
-        ttl_score_item = torch.exp(ttl_score_item / self.temperature).sum(dim=1)
+        pos_score_item = torch.exp(pos_score_item / temperature.unsqueeze(1))
+        ttl_score_item = torch.exp(ttl_score_item / temperature.unsqueeze(1)).sum(dim=1)
+        
         ssl_loss_item = -torch.log(pos_score_item / ttl_score_item).sum()
-
+       
+        
         ssl_loss = self.ssl_reg * (ssl_loss_user + self.alpha * ssl_loss_item)
         return ssl_loss
 
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
     
-    def loss_fn1(self, p, z):  # negative cosine similarity
-        
-        return - F.cosine_similarity(p, z.detach(), dim=-1).mean()
-
-    def calculate_cf_loss(self, u_online, u_target, i_online, i_target):
-        
-        u_online, i_online = self.predictor(u_online), self.predictor(i_online)
-
-        loss_ui = self.loss_fn1(u_online, i_target)/2
-        loss_iu = self.loss_fn1(i_online, u_target)/2
-
-        return loss_ui + loss_iu
+    
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -443,10 +454,8 @@ class lgn_tau_frame(nn.Module):
         emb_list = embs.transpose(0, 1)
         initial_emb = emb_list[0]
         context_emb = emb_list[self.hyper_layers*2]
-        ssl_loss = self.ssl_layer_loss(context_emb,initial_emb, user, pos_item)
+        
         proto_loss = 0
-        if self.epoch >= 20:
-            proto_loss = self.ProtoNCE_loss(initial_emb, user, pos_item)
         
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
@@ -466,9 +475,15 @@ class lgn_tau_frame(nn.Module):
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
+            
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
-                
-            return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_, emb_loss, tau, ssl_loss + proto_loss
+            ssl_loss = self.ssl_layer_loss(context_emb,initial_emb, user, pos_item, tau)
+            if self.epoch >= 20:
+                proto_loss = self.ProtoNCE_loss(initial_emb, user, pos_item, tau)
+        
+                return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_ + ssl_loss + proto_loss, emb_loss, tau, ssl_loss + proto_loss
+            else:
+                return loss.mean() + emb_loss + ssl_loss, loss_, emb_loss, tau, ssl_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred
