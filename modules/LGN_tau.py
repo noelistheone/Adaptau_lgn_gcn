@@ -134,7 +134,7 @@ class lgn_tau_frame(nn.Module):
         self.sampling_method = args_config.sampling_method
         
         self.hyper_layers = 1
-        self.ssl_reg = 1e-7
+        self.ssl_reg = 1e-8
         self.alpha = 1.5
         self.proto_reg = 8e-8
         
@@ -483,7 +483,7 @@ class lgn_tau_frame(nn.Module):
         
                 return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_ + ssl_loss + proto_loss, emb_loss, tau, ssl_loss + proto_loss
             else:
-                return loss.mean() + emb_loss + ssl_loss, loss_, emb_loss, tau, ssl_loss
+                return loss.mean() + emb_loss + ssl_loss, loss_ + ssl_loss, emb_loss, tau, ssl_loss
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

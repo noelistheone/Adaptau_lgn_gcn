@@ -102,7 +102,7 @@ class lgn_tau_cf_frame(nn.Module):
       
         self.temperature = args_config.temperature
         self.temperature_2 = args_config.temperature_2
-        self.lamda = 0.2
+        self.lamda = 0.5
       
         self.device = torch.device("cuda:0") if args_config.cuda else torch.device("cpu")
        
