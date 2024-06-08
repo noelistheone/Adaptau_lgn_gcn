@@ -32,6 +32,7 @@ class GraphConv(nn.Module):
         self.mess_dropout_rate = mess_dropout_rate
 
         self.dropout = nn.Dropout(p=mess_dropout_rate)  # mess dropout
+        self.eps = 0.03
 
     def _sparse_dropout(self, x, rate=0.5):
         noise_shape = x._nnz()
@@ -49,7 +50,7 @@ class GraphConv(nn.Module):
         return out * (1. / (1 - rate))
 
     def forward(self, user_embed, item_embed,
-                mess_dropout=True, edge_dropout=True, perturb=False):
+                mess_dropout=True, edge_dropout=True, perturbed=False):
         # user_embed: [n_users, channel]
         # item_embed: [n_items, channel]
 
@@ -57,7 +58,7 @@ class GraphConv(nn.Module):
         all_embed = torch.cat([user_embed, item_embed], dim=0)
         agg_embed = all_embed
         embs = [all_embed]
-
+        all_embeddings_cl = agg_embed
         for hop in range(self.n_hops):
             interact_mat = self._sparse_dropout(self.interact_mat,
                                                 self.edge_dropout_rate) if edge_dropout \
@@ -66,12 +67,16 @@ class GraphConv(nn.Module):
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
-            if perturb:
-                random_noise = torch.rand_like(agg_embed).cuda()
-                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.1
             # agg_embed = F.normalize(agg_embed)
+            if perturbed:
+                random_noise = torch.rand_like(agg_embed).cuda()
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * self.eps
             embs.append(agg_embed)
+            if hop==0:
+                all_embeddings_cl = agg_embed
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
+        if perturbed:
+            return embs[:self.n_users, :], embs[self.n_users:, :],all_embeddings_cl[:self.n_users, :], all_embeddings_cl[self.n_users:, :], embs
         return embs[:self.n_users, :], embs[self.n_users:, :], embs
     
 class lgn_tau_frame(nn.Module):
@@ -129,14 +134,15 @@ class lgn_tau_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(args_config.loss_fn))
         
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
-        self.register_buffer("memory_tau1", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau_u", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau_i", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
         self.hyper_layers = 1
         self.ssl_reg = 1e-8
         self.alpha = 1.5
-        self.proto_reg = 8e-8
+        self.proto_reg = 8e-7
         
         self.predictor = nn.Linear(self.emb_size, self.emb_size)
         
@@ -176,12 +182,19 @@ class lgn_tau_frame(nn.Module):
             x = x.detach()
             self.memory_tau = x
             
-    def _update_tau_memory1(self, x):
+    def _update_tau_memory_u(self, x):
         # x: std [B]
         # y: update position [B]
         with torch.no_grad():
             x = x.detach()
-            self.memory_tau1 = x
+            self.memory_tau_u = x
+
+    def _update_tau_memory_i(self, x):
+        # x: std [B]
+        # y: update position [B]
+        with torch.no_grad():
+            x = x.detach()
+            self.memory_tau_i = x
 
     def _loss_to_tau(self, x, x_all):
         if self.tau_mode == "weight_v0":
@@ -234,14 +247,20 @@ class lgn_tau_frame(nn.Module):
                 laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
                 tau = (t_0 * torch.exp(-laberw_data)).detach()
         return tau
+    
+    def cal_cl_loss(self,user_view1,user_view2,item_view1,item_view2,temperature_u, temperature_i):
+        
+        user_cl_loss, user_ = self.InfoNCE_1(user_view1, user_view2, temperature_u.unsqueeze(1))
+        item_cl_loss, item_ = self.InfoNCE_1(item_view1, item_view2, temperature_i.unsqueeze(1))
+        return user_cl_loss + item_cl_loss, user_, item_
 
-    def forward(self, batch=None, loss_per_user=None, loss_per_user_1=None, epoch=0, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, loss_per_user_u=None, loss_per_user_i=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
-        user_gcn_emb, item_gcn_emb, embs = self.gcn(self.user_embed,
+        user_gcn_emb, item_gcn_emb, cl_user_emb, cl_item_emb, embs = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
-                                              mess_dropout=self.mess_dropout)
+                                              mess_dropout=self.mess_dropout, perturbed=True)
         self.epoch = epoch
         
         # if self.epoch >= 20:
@@ -250,11 +269,13 @@ class lgn_tau_frame(nn.Module):
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)
-            
+            tau_user_u = self._loss_to_tau(loss_per_user_u, w_0)
+            tau_user_i = self._loss_to_tau(loss_per_user_i, w_0)
             self._update_tau_memory(tau_user)
-            
+            self._update_tau_memory_u(tau_user_u)
+            self._update_tau_memory_i(tau_user_i)
         if self.sampling_method == "no_sample":
-            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], embs, user, pos_item, w_0)
+            return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item],  cl_user_emb[user], cl_item_emb[pos_item], embs, user, pos_item, w_0)
         else:
             neg_item = batch['neg_items']
             return self.Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], item_gcn_emb[neg_item], user, w_0)
@@ -281,6 +302,27 @@ class lgn_tau_frame(nn.Module):
         
         
         return -score.mean()
+    
+    def InfoNCE_1(self, view1, view2, temperature: float, b_cos: bool = True):
+        """
+        Args:
+            view1: (torch.Tensor - N x D)
+            view2: (torch.Tensor - N x D)
+            temperature: float
+            b_cos (bool)
+
+        Return: Average InfoNCE Loss
+        """
+        # view1 = self.pooling(view1)
+        # view2 = self.pooling(view2)
+        if b_cos:
+            view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
+
+        pos_score = (view1 @ view2.T) / temperature
+        score = torch.diag(F.log_softmax(pos_score, dim=1))
+        
+        
+        return -score.mean(), -score
     
        
 
@@ -447,15 +489,17 @@ class lgn_tau_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(self.loss_name))
 
 
-    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, embs, user, pos_item, w_0=None):
+    def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, cl_user_emb, cl_item_emb, embs, user, pos_item, w_0=None):
         batch_size = user_gcn_emb.shape[0]
         u_e = self.pooling(user_gcn_emb)  # [B, F]
         pos_e = self.pooling(pos_gcn_emb) # [B, F]
         emb_list = embs.transpose(0, 1)
         initial_emb = emb_list[0]
-        context_emb = emb_list[self.hyper_layers*2]
+        context_emb = emb_list[2]
         
         proto_loss = 0
+        ssl_user = 0
+        proto_user = 0
         
         if self.u_norm:
             u_e = F.normalize(u_e, dim=-1)
@@ -475,15 +519,17 @@ class lgn_tau_frame(nn.Module):
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
-            
+            tau_u = torch.index_select(self.memory_tau_u, 0, user).detach()
+            tau_i = torch.index_select(self.memory_tau_i, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
             ssl_loss = self.ssl_layer_loss(context_emb,initial_emb, user, pos_item, tau)
+            cl_loss, cl_loss_u, cl_loss_i = self.cal_cl_loss(u_e, cl_user_emb, pos_e, cl_item_emb, tau_u, tau_i)
             if self.epoch >= 20:
                 proto_loss = self.ProtoNCE_loss(initial_emb, user, pos_item, tau)
         
-                return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_ + ssl_loss + proto_loss, emb_loss, tau, ssl_loss + proto_loss
+                return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_, emb_loss, tau, ssl_loss + proto_loss,  cl_loss_u, cl_loss_i
             else:
-                return loss.mean() + emb_loss + ssl_loss, loss_ + ssl_loss, emb_loss, tau, ssl_loss
+                return loss.mean() + emb_loss + ssl_loss + proto_loss, loss_ + ssl_user + proto_user, emb_loss, tau, ssl_loss + proto_loss, cl_loss_u, cl_loss_i
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

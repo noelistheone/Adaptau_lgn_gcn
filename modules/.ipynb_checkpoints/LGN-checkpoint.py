@@ -47,7 +47,7 @@ class GraphConv(nn.Module):
         return out * (1. / (1 - rate))
 
     def forward(self, user_embed, item_embed,
-                mess_dropout=True, edge_dropout=True, perturb=False):
+                mess_dropout=True, edge_dropout=True, epoch=0):
         # user_embed: [n_users, channel]
         # item_embed: [n_items, channel]
 
@@ -64,9 +64,9 @@ class GraphConv(nn.Module):
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
-            if perturb:
+            if epoch>=0:
                 random_noise = torch.rand_like(agg_embed).cuda()
-                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.1
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.05
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
@@ -140,11 +140,12 @@ class lgn_frame(nn.Module):
             raise NotImplementedError("loss={} is not support".format(args_config.loss_fn))
         
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
-        self.register_buffer("memory_tau1", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau_u", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau_i", torch.full((self.n_users,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
-        self.lamda = 0.1
+        self.lamda = 1
         
 
     def _init_weight(self):
@@ -173,12 +174,19 @@ class lgn_frame(nn.Module):
             x = x.detach()
             self.memory_tau = x
             
-    def _update_tau_memory1(self, x):
+    def _update_tau_memory_u(self, x):
         # x: std [B]
         # y: update position [B]
         with torch.no_grad():
             x = x.detach()
-            self.memory_tau1 = x
+            self.memory_tau_u = x
+
+    def _update_tau_memory_i(self, x):
+        # x: std [B]
+        # y: update position [B]
+        with torch.no_grad():
+            x = x.detach()
+            self.memory_tau_i = x
 
     def _loss_to_tau(self, x, x_all):
         if self.tau_mode == "weight_v0":
@@ -260,22 +268,24 @@ class lgn_frame(nn.Module):
         return loss
 
 
-    def forward(self, batch=None, loss_per_user=None, loss_per_user_1=None, epoch=0, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, loss_per_user_u = None, loss_per_user_i=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
-                                              mess_dropout=self.mess_dropout)
+                                              mess_dropout=self.mess_dropout, epoch=epoch)
         
         
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
             tau_user = self._loss_to_tau(loss_per_user, w_0)
-            tau_1 = self._loss_to_tau1(loss_per_user_1, w_0)
+            tau_user_u = self._loss_to_tau(loss_per_user_u, w_0)
+            tau_user_i = self._loss_to_tau(loss_per_user_i, w_0)
             self._update_tau_memory(tau_user)
-            self._update_tau_memory1(tau_1)
+            self._update_tau_memory_u(tau_user_u)
+            self._update_tau_memory_i(tau_user_i)
         if self.sampling_method == "no_sample":
             return self.NO_Sample_Uniform_loss(user_gcn_emb[user], item_gcn_emb[pos_item], user, pos_item, w_0)
         else:
@@ -300,8 +310,8 @@ class lgn_frame(nn.Module):
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=False,
-                                              mess_dropout=False,
-                                              perturb=noise)
+                                              mess_dropout=False
+                                              )
         user_gcn_emb, item_gcn_emb = self.pooling(user_gcn_emb), self.pooling(item_gcn_emb)
         return user_gcn_emb.detach(), item_gcn_emb.detach()
 
@@ -347,8 +357,8 @@ class lgn_frame(nn.Module):
         score = torch.diag(F.log_softmax(pos_score, dim=1))
         
         pos_ = (view1 @ view2.T)
-        score_ = torch.diag(F.log_softmax(pos_, dim=1))
-        return -score.mean(), -score_
+        
+        return -score.mean(), -score
         # F.normalize(view2, dim=1)
         # pos_score = (view1 * view2).sum(dim=-1)
         # pos_score = torch.exp(pos_score / temperature)
@@ -409,9 +419,9 @@ class lgn_frame(nn.Module):
 #         return user_cl_loss + item_cl_loss
 
     def user_encoding(self, x):
-        i_emb = self.user_embed[x]
-        i1_emb = self.dropout(i_emb)
-        i2_emb = self.dropout(i_emb)
+        # i_emb = self.user_embed[x]
+        i1_emb = self.dropout(x)
+        i2_emb = self.dropout(x)
 
         i1_emb = self.user_tower(i1_emb)
         i2_emb = self.user_tower(i2_emb)
@@ -419,24 +429,24 @@ class lgn_frame(nn.Module):
         return i1_emb, i2_emb
     
     def item_encoding(self, x):
-        i_emb = self.item_embed[x]
-        i1_emb = self.dropout(i_emb)
-        i2_emb = self.dropout(i_emb)
+        # i_emb = self.item_embed[x]
+        i1_emb = self.dropout(x)
+        i2_emb = self.dropout(x)
 
         i1_emb = self.item_tower(i1_emb)
         i2_emb = self.item_tower(i2_emb)
 
         return i1_emb, i2_emb
     
-    def cal_cl_loss(self, user, item, temperature_):
-        # user_view_1, user_view_2 = self.user_encoding(user)
+    def cal_cl_loss(self, user, item, temperature_u, temperature_i):
+        user_view_1, user_view_2 = self.user_encoding(user)
         item_view_1, item_view_2 = self.item_encoding(item)   
-        # user_cl_loss, user_ = self.InfoNCE(user_view_1, user_view_2, temperature_.unsqueeze(1))
-        item_cl_loss, item_ = self.InfoNCE(item_view_1, item_view_2, temperature_.unsqueeze(1))
+        user_cl_loss, user_ = self.InfoNCE(user_view_1, user_view_2, temperature_u.unsqueeze(1))
+        item_cl_loss, item_ = self.InfoNCE(item_view_1, item_view_2, temperature_i.unsqueeze(1))
         
-        cl_loss = item_cl_loss
+        cl_loss = item_cl_loss + user_cl_loss
         
-        return cl_loss, item_
+        return cl_loss, user_, item_
 
 
     def NO_Sample_Uniform_loss(self, user_gcn_emb, pos_gcn_emb, user, pos_item, w_0=None):
@@ -463,11 +473,13 @@ class lgn_frame(nn.Module):
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
             tau = torch.index_select(self.memory_tau, 0, user).detach()
-            tau1 = torch.index_select(self.memory_tau1, 0, user).detach()
+            tau_u = torch.index_select(self.memory_tau_u, 0, user).detach()
+            tau_i = torch.index_select(self.memory_tau_i, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
             # Calculate contrastive loss
-            cl_loss, cl_loss_ = self.cal_cl_loss(user, pos_item, tau1)
-            return loss.mean() + emb_loss + cl_loss, loss_, emb_loss, tau, cl_loss, cl_loss_
+            user_e, positive_e = self.gcn_emb()
+            cl_loss, cl_loss_u, cl_loss_i = self.cal_cl_loss(user_e[user], positive_e[pos_item], tau_u, tau_i)
+            return loss.mean() + emb_loss + self.lamda * cl_loss, loss_, emb_loss, tau, self.lamda * cl_loss, cl_loss_u, cl_loss_i
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred
