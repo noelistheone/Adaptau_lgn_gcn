@@ -4,6 +4,7 @@ import os
 import random
 
 import torch
+
 import numpy as np
 from utils.parser import parse_args
 
@@ -224,6 +225,7 @@ if __name__ == '__main__':
 
     kill_cnt = 0
     best_ndcg = -np.inf
+    loss_store = 0
     eval_earlystop = args.eval_earlystop.split('@')
     eval_to_int = {'ndcg':0, 'recall':1, 'precision':2}
     eval_str = [eval_to_int[eval_earlystop[0]], eval(eval_earlystop[1])]
@@ -237,7 +239,10 @@ if __name__ == '__main__':
         loss_per_user = None
         loss_per_user_u = None
         loss_per_user_i = None
+        loss_per_user_us = None
+        loss_per_user_is = None
         loss_per_ins = None
+        meta_loss_grad = None
         # prepare for tau_0
         pos = train_cf.to(device)
         nu = scatter(torch.ones(len(train_cf), device=device), pos[:, 0], dim=0, reduce='sum')
@@ -258,6 +263,8 @@ if __name__ == '__main__':
             losses_train = []
             losses_nce_train_u = []
             losses_nce_train_i = []
+            losses_nce_train_us = []
+            losses_nce_train_is = []
             tau_maxs = []
             tau_mins = []
             losses_emb = []
@@ -297,6 +304,7 @@ if __name__ == '__main__':
                 if args.gnn == "lgntau":
                     model.e_step()
             
+            model.initial_losses=None
                 
             while s + args.batch_size <= len(train_cf):
                 # print('Step: {}'.format(s))
@@ -305,19 +313,29 @@ if __name__ == '__main__':
                                       s, s + args.batch_size,
                                       n_negs)
 
-                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i, epoch=epoch, w_0=w_0, s=s)
-                
+                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is, current_losses = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i, loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is, meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
+                with torch.no_grad():
+                    # Ensure model.eps is a tensor
+                    # if args.gnn == "lgntau":
+                    #     if isinstance(model.eps, float):
+                    #         eps = torch.tensor(model.eps, requires_grad=True)
+                    #     meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                    if args.gnn == "lgntaucf":
+                        eps = model.eps.detach().clone().requires_grad_(True)
+                        meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
                 losses_nce.append(nce_loss.item())
                 losses_nce_train_u.append(loss_u)
                 losses_nce_train_i.append(loss_i)
+                losses_nce_train_us.append(loss_us)
+                losses_nce_train_is.append(loss_is)
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
                 optimizer.step()
-
+                
                 loss += batch_loss.item()
                 s += args.batch_size
             
@@ -326,27 +344,46 @@ if __name__ == '__main__':
                 batch = sample.get_feed_dict_reset(train_cf_,
                                       user_dict['train_user_set'],
                                       s, n_negs)
-                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i, epoch=epoch, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is, current_losses = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i,  loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is,meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
+                with torch.no_grad():
+                    # # Ensure model.eps is a tensor
+                    # if args.gnn == "lgntaucf":
+                    #     if isinstance(model.eps, float):
+                    #         eps = torch.tensor(model.eps, requires_grad=True)
+                    #     meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                    if args.gnn == "lgntaucf":
+                        eps = model.eps.detach().clone().requires_grad_(True)
+                        meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
                 losses_nce.append(nce_loss.item())
                 losses_nce_train_u.append(loss_u)
                 losses_nce_train_i.append(loss_i)
+                losses_nce_train_us.append(loss_us)
+                losses_nce_train_is.append(loss_is)
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
                 optimizer.step()
+                
 
                 loss += batch_loss.item()
                 s += args.batch_size
             train_e_t = time.time()
             #print(losses_train.shape)
+            
+            # print(losses_train)
             losses_nce_train_u = torch.cat(losses_nce_train_u, dim=0)
-            # print(train_cf_)
+            
             loss_per_user_u = scatter(losses_nce_train_u, train_cf_[:, 0], dim=0, reduce='mean')
             losses_nce_train_i = torch.cat(losses_nce_train_i, dim=0)
             loss_per_user_i = scatter(losses_nce_train_i, train_cf_[:, 1], dim=0, reduce='mean')
+            losses_nce_train_us = torch.cat(losses_nce_train_us, dim=0)
+            
+            loss_per_user_us = scatter(losses_nce_train_us, train_cf_[:, 0], dim=0, reduce='mean')
+            losses_nce_train_is = torch.cat(losses_nce_train_is, dim=0)
+            loss_per_user_is = scatter(losses_nce_train_is, train_cf_[:, 1], dim=0, reduce='mean')
             losses_train = torch.cat(losses_train, dim=0)
             loss_per_user = scatter(losses_train, train_cf_[:, 0], dim=0, reduce='mean')
             # valid

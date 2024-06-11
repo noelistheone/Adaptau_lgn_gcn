@@ -30,6 +30,7 @@ class GraphConv(nn.Module):
         self.mess_dropout_rate = mess_dropout_rate
 
         self.dropout = nn.Dropout(p=mess_dropout_rate)  # mess dropout
+        
 
     def _sparse_dropout(self, x, rate=0.5):
         noise_shape = x._nnz()
@@ -45,9 +46,10 @@ class GraphConv(nn.Module):
 
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
+    
 
     def forward(self, user_embed, item_embed,
-                mess_dropout=True, edge_dropout=True, epoch=0):
+                mess_dropout=True, edge_dropout=True, perturbed=True, eps=0.03):
         # user_embed: [n_users, channel]
         # item_embed: [n_items, channel]
 
@@ -64,9 +66,9 @@ class GraphConv(nn.Module):
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
-            if epoch>=0:
+            if perturbed:
                 random_noise = torch.rand_like(agg_embed).cuda()
-                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * 0.05
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * eps
             # agg_embed = F.normalize(agg_embed)
             embs.append(agg_embed)
         embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
@@ -119,6 +121,13 @@ class lgn_frame(nn.Module):
         )
         self.dropout_rate = 0.1
         self.dropout = nn.Dropout(self.dropout_rate)
+        
+        self.min_eps = 0.01
+        self.max_eps = 0.05
+        self.beta = 0.1
+        self.alpha = 0.01
+        self.eps = 0.03
+        self.eps_grad = 0  # Placeholder for gradient of epsilon
        
         self._init_weight()
         self.user_embed = nn.Parameter(self.user_embed)
@@ -127,6 +136,7 @@ class lgn_frame(nn.Module):
         self.loss_name = args_config.loss_fn
     
         self.generate_mode = args_config.generate_mode
+        self.InfoNCE = losses.InfoNCE()
 
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
@@ -141,7 +151,7 @@ class lgn_frame(nn.Module):
         
         self.register_buffer("memory_tau", torch.full((self.n_users,), 1 / 0.10))
         self.register_buffer("memory_tau_u", torch.full((self.n_users,), 1 / 0.10))
-        self.register_buffer("memory_tau_i", torch.full((self.n_users,), 1 / 0.10))
+        self.register_buffer("memory_tau_i", torch.full((self.n_items,), 1 / 0.10))
         self.gcn = self._init_model()
         self.sampling_method = args_config.sampling_method
         
@@ -166,6 +176,14 @@ class lgn_frame(nn.Module):
         i = torch.LongTensor([coo.row, coo.col])
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
+    
+    def update_eps(self, meta_loss_grad):
+         with torch.no_grad():
+            self.eps -= self.beta * meta_loss_grad
+            self.eps = self.eps.clamp_(self.min_eps, self.max_eps)
+        # self.eps_grad = meta_loss_grad
+        # self.eps = max(self.min_eps, min(self.max_eps, self.eps - self.beta * self.eps_grad))
+        # return self.eps
 
     def _update_tau_memory(self, x):
         # x: std [B]
@@ -214,31 +232,7 @@ class lgn_frame(nn.Module):
                 tau = (t_0 * torch.exp(-laberw_data)).detach()
         return tau
     
-    def _loss_to_tau1(self, x, x_all):
-        if self.tau_mode == "weight_v0":
-            t_0 = x_all
-            tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
-        elif self.tau_mode == "weight_ratio":
-            t_0 = x_all
-            if x is None:
-                tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
-            else:
-                base_laberw = torch.quantile(x, self.temperature)
-                laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
-                                        min=-np.e ** (-1), max=1000)
-                laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
-                tau = (t_0 * torch.exp(-laberw_data)).detach()
-        elif self.tau_mode == "weight_mean":
-            t_0 = x_all
-            if x is None:
-                tau = t_0 * torch.ones_like(self.memory_tau1, device=self.device)
-            else:
-                base_laberw = torch.mean(x)
-                laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
-                                        min=-np.e ** (-1), max=1000)
-                laberw_data = self.lambertw_table[((laberw_data + 1) * 1e4).long()]
-                tau = (t_0 * torch.exp(-laberw_data)).detach()
-        return tau
+    
     
     def augment_embeddings(self, embeddings, rate=0.2):
         noise = torch.randn_like(embeddings) * rate
@@ -268,13 +262,15 @@ class lgn_frame(nn.Module):
         return loss
 
 
-    def forward(self, batch=None, loss_per_user=None, loss_per_user_u = None, loss_per_user_i=None, epoch=0, w_0=None, s=0):
+    def forward(self, batch=None, loss_per_user=None, loss_per_user_u = None, loss_per_user_i=None, meta_loss_grad=None, epoch=0, w_0=None, s=0):
         user = batch['users']
         pos_item = batch['pos_items']
+        if meta_loss_grad is not None:
+            self.update_eps(meta_loss_grad)
         user_gcn_emb, item_gcn_emb = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
-                                              mess_dropout=self.mess_dropout, epoch=epoch)
+                                              mess_dropout=self.mess_dropout, perturbed=True, eps=self.eps)
         
         
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
@@ -338,34 +334,7 @@ class lgn_frame(nn.Module):
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
     
-    def InfoNCE(self, view1, view2, temperature: float, b_cos: bool = True):
-        """
-        Args:
-            view1: (torch.Tensor - N x D)
-            view2: (torch.Tensor - N x D)
-            temperature: float
-            b_cos (bool)
-
-        Return: Average InfoNCE Loss
-        """
-        # view1 = self.pooling(view1)
-        # view2 = self.pooling(view2)
-        if b_cos:
-            view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
-
-        pos_score = (view1 @ view2.T) / temperature
-        score = torch.diag(F.log_softmax(pos_score, dim=1))
-        
-        pos_ = (view1 @ view2.T)
-        
-        return -score.mean(), -score
-        # F.normalize(view2, dim=1)
-        # pos_score = (view1 * view2).sum(dim=-1)
-        # pos_score = torch.exp(pos_score / temperature)
-        # ttl_score = torch.matmul(view1, view2.transpose(0, 1))
-        # ttl_score = torch.exp(ttl_score / temperature).sum(dim=1)
-        # cl_loss = -torch.log(pos_score / ttl_score + 10e-6)
-        # return torch.mean(cl_loss)
+    
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -444,7 +413,7 @@ class lgn_frame(nn.Module):
         user_cl_loss, user_ = self.InfoNCE(user_view_1, user_view_2, temperature_u.unsqueeze(1))
         item_cl_loss, item_ = self.InfoNCE(item_view_1, item_view_2, temperature_i.unsqueeze(1))
         
-        cl_loss = item_cl_loss + user_cl_loss
+        cl_loss = user_cl_loss + item_cl_loss
         
         return cl_loss, user_, item_
 
@@ -472,13 +441,14 @@ class lgn_frame(nn.Module):
         
         if self.loss_name == "Adap_tau_Loss":
             mask_zeros = None
+            
             tau = torch.index_select(self.memory_tau, 0, user).detach()
             tau_u = torch.index_select(self.memory_tau_u, 0, user).detach()
             tau_i = torch.index_select(self.memory_tau_i, 0, user).detach()
             loss, loss_ = self.loss_fn(y_pred, tau, w_0)
             # Calculate contrastive loss
-            user_e, positive_e = self.gcn_emb()
-            cl_loss, cl_loss_u, cl_loss_i = self.cal_cl_loss(user_e[user], positive_e[pos_item], tau_u, tau_i)
+            # user_e, positive_e = self.gcn_emb()
+            cl_loss, cl_loss_u, cl_loss_i = self.cal_cl_loss(u_e, pos_e, tau_u, tau_i)
             return loss.mean() + emb_loss + self.lamda * cl_loss, loss_, emb_loss, tau, self.lamda * cl_loss, cl_loss_u, cl_loss_i
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)

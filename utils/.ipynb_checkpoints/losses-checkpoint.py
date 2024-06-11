@@ -67,3 +67,31 @@ class L2Loss(nn.Module):
         for embedding in embeddings:
             l2_loss += torch.sum(embedding**2)*0.5
         return l2_loss
+    
+class InfoNCE(nn.Module):
+    def _init_(self):
+        super(InfoNCE, self)._init_()
+        
+    def forward(self, view1, view2, temperature: float, b_cos: bool = True):
+        """
+        Args:
+            view1: (torch.Tensor - N x D)
+            view2: (torch.Tensor - N x D)
+            temperature: float
+            b_cos (bool)
+
+        Return: Average InfoNCE Loss
+        """
+        # view1 = self.pooling(view1)
+        # view2 = self.pooling(view2)
+        if b_cos:
+            view1, view2 = F.normalize(view1, dim=1), F.normalize(view2, dim=1)
+
+        pos_score = (view1 @ view2.T) / temperature
+        score = torch.diag(F.log_softmax(pos_score, dim=1))
+        # Compute scores without temperature scaling
+        pos_score_no_temp = (view1 @ view2.T)
+        score_no_temp = torch.diag(F.log_softmax(pos_score_no_temp, dim=1))
+        loss_ = -score_no_temp.detach()
+        
+        return -score.mean(), loss_
