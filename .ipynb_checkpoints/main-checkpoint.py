@@ -18,6 +18,7 @@ from torch_scatter import scatter
 from utils.data_loader import load_data
 from utils.evaluate import test_sp
 import torch.nn.functional as F
+import torch.nn as nn
 import os.path as osp
 
 n_users = 0
@@ -321,8 +322,10 @@ if __name__ == '__main__':
                     #         eps = torch.tensor(model.eps, requires_grad=True)
                     #     meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
                     if args.gnn == "lgntaucf":
-                        eps = model.eps.detach().clone().requires_grad_(True)
-                        meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                        # eps = model.eps.detach().clone().requires_grad_(True)
+                        # meta__loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                        model.eps = model.eps.detach().clone().requires_grad_(True)
+                        meta_loss_grad = torch.autograd.grad(nce_loss, model.eps, retain_graph=True, allow_unused=True)[0]
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
@@ -334,6 +337,7 @@ if __name__ == '__main__':
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5)  # Gradient clipping
                 optimizer.step()
                 
                 loss += batch_loss.item()
@@ -352,8 +356,10 @@ if __name__ == '__main__':
                     #         eps = torch.tensor(model.eps, requires_grad=True)
                     #     meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
                     if args.gnn == "lgntaucf":
-                        eps = model.eps.detach().clone().requires_grad_(True)
-                        meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                        # eps = model.eps.detach().clone().requires_grad_(True)
+                        # meta_loss_grad = torch.autograd.grad(batch_loss, eps, retain_graph=True, allow_unused=True)[0]
+                        model.eps = model.eps.detach().clone().requires_grad_(True)
+                        meta_loss_grad = torch.autograd.grad(nce_loss, model.eps, retain_graph=True, allow_unused=True)[0]
                 tau_maxs.append(tau.max().item())
                 tau_mins.append(tau.min().item())
                 losses_emb.append(emb_loss.item())
@@ -365,6 +371,7 @@ if __name__ == '__main__':
                 losses_train.append(train_loss)
                 optimizer.zero_grad()
                 batch_loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5)  # Gradient clipping
                 optimizer.step()
                 
 

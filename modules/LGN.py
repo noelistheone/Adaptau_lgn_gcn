@@ -1,3 +1,27 @@
+"""
+for hop in range(self.n_hops):
+            interact_mat = self._sparse_dropout(self.interact_mat,
+                                                self.edge_dropout_rate) if edge_dropout \
+                                                                        else self.interact_mat
+
+            # agg_embed = torch.sparse.mm(interact_mat, agg_embed)
+            # neighbors = torch.sparse.mm(interact_mat, agg_embed)
+            # agg_embed = self.gat_layer(agg_embed, interact_mat)
+            agg_embed = self.gc_layers(agg_embed, interact_mat)
+            if mess_dropout:
+                agg_embed = self.dropout(agg_embed)
+            # agg_embed = F.normalize(agg_embed)
+            if perturbed:
+                random_noise = torch.rand_like(agg_embed).cuda()
+                agg_embed += torch.sign(agg_embed) * F.normalize(random_noise, dim=-1) * eps
+            embs.append(agg_embed)
+            if hop==0:
+                all_embeddings_cl = agg_embed
+        embs = torch.stack(embs, dim=1)  # [n_entity, n_hops+1, emb_size]
+        if perturbed:
+            return embs[:self.n_users, :], embs[self.n_users:, :],all_embeddings_cl[:self.n_users, :], all_embeddings_cl[self.n_users:, :]
+        return embs[:self.n_users, :], embs[self.n_users:, :]
+"""
 '''
 Created on March 1st, 2023
 
