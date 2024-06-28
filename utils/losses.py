@@ -189,14 +189,14 @@ class InfoNCE(nn.Module):
         if b_cos:
             views = [F.normalize(view, dim=1) for view in views]
 
-        # Determine the input dimension
-        view_dim = views[0].shape[1]
+        
 
         # Create the attention layer dynamically based on input dimension
         self.attention_layer = nn.Sequential(
-            nn.Linear(view_dim, 256),
+            nn.Linear(64, 256),
             nn.ReLU(),
-            nn.Linear(256, 1)
+            nn.Linear(256, 1),
+            nn.Tanh()
         ).to(views[0].device)  # Ensure it is on the same device as the views
 
         # Get the number of views

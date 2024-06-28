@@ -1,13 +1,97 @@
-2024-06-28 16:28:03,593 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGNtau_cf_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_28_06_2024_16:28:03', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
-2024-06-28 16:28:05,727 - [INFO] - load train.txt
-2024-06-28 16:28:10,082 - [INFO] - building the adj mat ...
-2024-06-28 16:28:10,665 - [INFO] - train set len is 810128
-2024-06-28 16:28:10,665 - [INFO] - test set len is 217242
-2024-06-28 16:28:10,665 - [INFO] - loading over ...
-2024-06-28 16:28:10,665 - [INFO] - users are 29858 items are 40981
+2024-06-28 19:28:56,032 - [INFO] - {'dataset': 'gowalla', 'data_path': './data/', 'name': 'gowalla_LGNtau_cf_mode_weight_mean_no_sample_nocosine_TAU_Adap_tau_Loss_2048_1024_lr_1e-3_l2_1e-5_t1_0.8_t2_0.6_nodrop_28_06_2024_19:28:56', 'train_ratio': 0.8, 'gnn': 'lgntaucf', 'epoch': 1000, 'batch_size': 2048, 'test_batch_size': 2048, 'dim': 64, 'l2': 1e-05, 'lr': 0.001, 'mess_dropout': False, 'mess_dropout_rate': 0.1, 'edge_dropout': False, 'edge_dropout_rate': 0.1, 'n_negs': 1024, 'pool': 'mean', 'cuda': True, 'gpu_id': 0, 'Ks': '[5, 10, 15, 20, 25, 30, 40, 50]', 'context_hops': 3, 'eval_earlystop': 'recall@20', 'temperature': 0.8, 'temperature_2': 0.6, 'temperature_3': 1.0, 'u_norm': True, 'i_norm': True, 'out_dir': './weights/', 'log_dir': './log/', 'config_dir': './config/', 'restore': False, 'loss_fn': 'Adap_tau_Loss', 'sampling_method': 'no_sample', 'generate_mode': 'nocosine', 'tau_mode': 'weight_mean', 'cnt_lr': 100}
+2024-06-28 19:28:58,174 - [INFO] - load train.txt
+2024-06-28 19:29:02,374 - [INFO] - building the adj mat ...
+2024-06-28 19:29:02,939 - [INFO] - train set len is 810128
+2024-06-28 19:29:02,939 - [INFO] - test set len is 217242
+2024-06-28 19:29:02,939 - [INFO] - loading over ...
+2024-06-28 19:29:02,940 - [INFO] - users are 29858 items are 40981
 Adap_tau_Loss
 start to make tables
-2024-06-28 16:28:23,385 - [INFO] - Evaluation Protocols is 1 @ 20
-2024-06-28 16:28:23,385 - [INFO] - start training ...
+2024-06-28 19:29:14,403 - [INFO] - Evaluation Protocols is 1 @ 20
+2024-06-28 19:29:14,403 - [INFO] - start training ...
 6.425596769544532
-2024-06-28 16:28:23,424 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:29:14,436 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:30:04,447 - [INFO] - E:0|TAU:9.179 9.179, train_time: 48.88, VALID_time: 1.127, loss: 5.324e+03, emb_loss:4.113e-07, nce_loss:15.05, best_valid(recall@20): -inf
+valid 	 N@5: 0.1118, R@5: 0.07582, P@5: 0.08771
+valid 	 N@10: 0.116, R@10: 0.1115, P@10: 0.06498
+valid 	 N@15: 0.1236, R@15: 0.1379, P@15: 0.05394
+valid 	 N@20: 0.1308, R@20: 0.1599, P@20: 0.04716
+valid 	 N@25: 0.1375, R@25: 0.1799, P@25: 0.04263
+valid 	 N@30: 0.1433, R@30: 0.1977, P@30: 0.03915
+valid 	 N@40: 0.1529, R@40: 0.228, P@40: 0.03408
+valid 	 N@50: 0.1607, R@50: 0.2533, P@50: 0.03045
+
+6.425596769544532
+2024-06-28 19:30:04,506 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:30:55,134 - [INFO] - E:1|TAU:6.2 24.95, train_time: 49.31, VALID_time: 1.313, loss: 5.009e+03, emb_loss:8.177e-07, nce_loss:15.05, best_valid(recall@20): 0.1599
+valid 	 N@5: 0.1174, R@5: 0.07484, P@5: 0.09238
+valid 	 N@10: 0.119, R@10: 0.1096, P@10: 0.06804
+valid 	 N@15: 0.1254, R@15: 0.135, P@15: 0.05623
+valid 	 N@20: 0.1318, R@20: 0.1556, P@20: 0.04905
+valid 	 N@25: 0.1373, R@25: 0.1731, P@25: 0.04391
+valid 	 N@30: 0.1425, R@30: 0.1894, P@30: 0.04017
+valid 	 N@40: 0.1511, R@40: 0.2168, P@40: 0.03472
+valid 	 N@50: 0.1579, R@50: 0.2391, P@50: 0.03083
+
+6.425596769544532
+2024-06-28 19:30:55,161 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:31:45,975 - [INFO] - E:2|TAU:6.499 23.04, train_time: 49.62, VALID_time: 1.189, loss: 4.912e+03, emb_loss:1.234e-06, nce_loss:15.04, best_valid(recall@20): 0.1599
+valid 	 N@5: 0.1274, R@5: 0.08294, P@5: 0.1002
+valid 	 N@10: 0.1294, R@10: 0.1201, P@10: 0.07335
+valid 	 N@15: 0.1372, R@15: 0.1491, P@15: 0.06097
+valid 	 N@20: 0.1447, R@20: 0.1727, P@20: 0.05333
+valid 	 N@25: 0.1513, R@25: 0.1934, P@25: 0.04791
+valid 	 N@30: 0.157, R@30: 0.2111, P@30: 0.0437
+valid 	 N@40: 0.1666, R@40: 0.2419, P@40: 0.03778
+valid 	 N@50: 0.1743, R@50: 0.2668, P@50: 0.03355
+
+6.425596769544532
+2024-06-28 19:31:46,054 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:32:35,897 - [INFO] - E:3|TAU:6.491 24.91, train_time: 48.75, VALID_time: 1.09, loss: 4.892e+03, emb_loss:1.586e-06, nce_loss:15.04, best_valid(recall@20): 0.1727
+valid 	 N@5: 0.1298, R@5: 0.08384, P@5: 0.102
+valid 	 N@10: 0.1327, R@10: 0.1237, P@10: 0.07557
+valid 	 N@15: 0.1407, R@15: 0.1535, P@15: 0.06294
+valid 	 N@20: 0.1481, R@20: 0.1771, P@20: 0.05482
+valid 	 N@25: 0.1548, R@25: 0.1982, P@25: 0.04923
+valid 	 N@30: 0.1609, R@30: 0.2172, P@30: 0.04505
+valid 	 N@40: 0.1708, R@40: 0.2488, P@40: 0.03898
+valid 	 N@50: 0.1787, R@50: 0.2746, P@50: 0.03461
+
+6.425596769544532
+2024-06-28 19:32:35,978 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:33:26,176 - [INFO] - E:4|TAU:6.482 21.98, train_time: 49.05, VALID_time: 1.143, loss: 4.861e+03, emb_loss:1.931e-06, nce_loss:15.04, best_valid(recall@20): 0.1771
+valid 	 N@5: 0.1334, R@5: 0.08676, P@5: 0.1044
+valid 	 N@10: 0.1364, R@10: 0.1271, P@10: 0.0773
+valid 	 N@15: 0.1445, R@15: 0.1573, P@15: 0.06419
+valid 	 N@20: 0.1523, R@20: 0.1821, P@20: 0.05608
+valid 	 N@25: 0.1592, R@25: 0.2036, P@25: 0.05041
+valid 	 N@30: 0.165, R@30: 0.2217, P@30: 0.04592
+valid 	 N@40: 0.1749, R@40: 0.2533, P@40: 0.03958
+valid 	 N@50: 0.1833, R@50: 0.2811, P@50: 0.03528
+
+6.425596769544532
+2024-06-28 19:33:26,249 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:34:17,075 - [INFO] - E:5|TAU:6.493 20.77, train_time: 49.56, VALID_time: 1.261, loss: 4.853e+03, emb_loss:2.278e-06, nce_loss:15.04, best_valid(recall@20): 0.1821
+valid 	 N@5: 0.1345, R@5: 0.08775, P@5: 0.1058
+valid 	 N@10: 0.1371, R@10: 0.1279, P@10: 0.07791
+valid 	 N@15: 0.145, R@15: 0.1577, P@15: 0.06444
+valid 	 N@20: 0.1529, R@20: 0.1828, P@20: 0.05636
+valid 	 N@25: 0.1599, R@25: 0.2047, P@25: 0.05068
+valid 	 N@30: 0.1659, R@30: 0.2236, P@30: 0.04629
+valid 	 N@40: 0.1762, R@40: 0.2563, P@40: 0.04002
+valid 	 N@50: 0.1843, R@50: 0.283, P@50: 0.03556
+
+6.425596769544532
+2024-06-28 19:34:17,161 - [INFO] - current w_0 is 9.17942388767301
+2024-06-28 19:35:09,308 - [INFO] - E:6|TAU:6.499 19.24, train_time: 50.91, VALID_time: 1.229, loss: 4.863e+03, emb_loss:2.633e-06, nce_loss:15.04, best_valid(recall@20): 0.1828
+valid 	 N@5: 0.1358, R@5: 0.08841, P@5: 0.1064
+valid 	 N@10: 0.1384, R@10: 0.1288, P@10: 0.07834
+valid 	 N@15: 0.1464, R@15: 0.1588, P@15: 0.06483
+valid 	 N@20: 0.1543, R@20: 0.1839, P@20: 0.05676
+valid 	 N@25: 0.1613, R@25: 0.206, P@25: 0.05095
+valid 	 N@30: 0.1673, R@30: 0.2247, P@30: 0.04653
+valid 	 N@40: 0.1773, R@40: 0.2566, P@40: 0.04012
+valid 	 N@50: 0.1857, R@50: 0.2841, P@50: 0.03565
+
+6.425596769544532
+2024-06-28 19:35:09,390 - [INFO] - current w_0 is 9.17942388767301
