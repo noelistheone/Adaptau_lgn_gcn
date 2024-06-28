@@ -168,22 +168,16 @@ class lgn_tau_cf_frame(nn.Module):
         self.user_tower = nn.Sequential(
             nn.Linear(self.emb_size, 1024),
             nn.ReLU(True),
-            nn.Linear(1024, 128),
+            nn.Linear(1024, 64),
             nn.Tanh()
         )
         self.item_tower = nn.Sequential(
             nn.Linear(self.emb_size, 1024),
             nn.ReLU(True),
-            nn.Linear(1024, 128),
+            nn.Linear(1024, 64),
             nn.Tanh()
         )
-        # Task Prioritization Network
-        self.task_prior_net = nn.Sequential(
-            nn.Linear(3, 128),  # Assuming 3 tasks
-            nn.ReLU(),
-            nn.Linear(128, 3),
-            nn.Softmax(dim=0)
-        ).to(self.device)
+        
         self.dropout_rate = 0.1
         self.dropout = nn.Dropout(self.dropout_rate)
 

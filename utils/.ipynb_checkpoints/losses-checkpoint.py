@@ -194,9 +194,9 @@ class InfoNCE(nn.Module):
 
         # Create the attention layer dynamically based on input dimension
         self.attention_layer = nn.Sequential(
-            nn.Linear(view_dim, 128),
+            nn.Linear(view_dim, 256),
             nn.ReLU(),
-            nn.Linear(128, 1)
+            nn.Linear(256, 1)
         ).to(views[0].device)  # Ensure it is on the same device as the views
 
         # Get the number of views
@@ -266,3 +266,4 @@ class InfoNCE(nn.Module):
             scale3 = F.adaptive_avg_pool2d(view, (32, 32))
             multi_scale_views.append(torch.cat([scale1, scale2, scale3], dim=1))
         return multi_scale_views
+
