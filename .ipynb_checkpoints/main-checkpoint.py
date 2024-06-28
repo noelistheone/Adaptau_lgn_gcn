@@ -314,7 +314,7 @@ if __name__ == '__main__':
                                       s, s + args.batch_size,
                                       n_negs)
 
-                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is, current_losses = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i, loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is, meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i, loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is, meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
                 with torch.no_grad():
                     # Ensure model.eps is a tensor
                     # if args.gnn == "lgntau":
@@ -348,7 +348,7 @@ if __name__ == '__main__':
                 batch = sample.get_feed_dict_reset(train_cf_,
                                       user_dict['train_user_set'],
                                       s, n_negs)
-                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is, current_losses = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i,  loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is,meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
+                batch_loss, train_loss, emb_loss, tau, nce_loss, loss_u, loss_i, loss_us, loss_is = model(batch, loss_per_user=loss_per_user, loss_per_user_u = loss_per_user_u, loss_per_user_i=loss_per_user_i,  loss_per_user_us = loss_per_user_us, loss_per_user_is=loss_per_user_is,meta_loss_grad=meta_loss_grad, epoch=epoch, w_0=w_0, s=s)
                 with torch.no_grad():
                     # # Ensure model.eps is a tensor
                     # if args.gnn == "lgntaucf":
