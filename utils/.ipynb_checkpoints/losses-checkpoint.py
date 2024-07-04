@@ -276,6 +276,9 @@ class InfoNCE(nn.Module):
 
         Return: Average InfoNCE Loss with and without temperature scaling
         """
+        # Extract multi-scale features
+        views = self.multi_scale_features(views)
+        
         # Normalize views if b_cos is True
         if b_cos:
             views = [F.normalize(view, dim=1) for view in views]
@@ -358,4 +361,15 @@ class InfoNCE(nn.Module):
         
         return weights
 
-
+    def multi_scale_features(self, views):
+        """
+        Extract multi-scale features
+        """
+        multi_scale_views = []
+        for view in views:
+            # Assuming the input view is 4D: (N, C, H, W)
+            scale1 = F.adaptive_avg_pool2d(view, (8, 8)).view(view.size(0), -1)  # Flatten
+            scale2 = F.adaptive_avg_pool2d(view, (16, 16)).view(view.size(0), -1)  # Flatten
+            scale3 = F.adaptive_avg_pool2d(view, (32, 32)).view(view.size(0), -1)  # Flatten
+            multi_scale_views.append(torch.cat([scale1, scale2, scale3], dim=1))
+        return multi_scale_views
