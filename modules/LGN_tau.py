@@ -1,3 +1,4 @@
+
 '''
 Created on March 1st, 2023
 
@@ -102,12 +103,11 @@ class lgn_tau_frame(nn.Module):
       
         self.temperature = args_config.temperature
         self.temperature_2 = args_config.temperature_2
-        self.lamda = 1.0
       
         self.device = torch.device("cuda:0") if args_config.cuda else torch.device("cpu")
         
-        self.min_eps = 0.02
-        self.max_eps = 0.08
+        self.min_eps = 0.01
+        self.max_eps = 0.1
         self.beta1 = 0.9
         self.beta2 = 0.999
         self.alpha = 0.01
@@ -121,10 +121,10 @@ class lgn_tau_frame(nn.Module):
         # Initialize weights for adaptive loss weighting
         self.task_weights = torch.ones(3).to(self.device)  # Assuming 3 loss components: main loss, cl_loss, cl_loss_s
         self.task_uncertainties = nn.Parameter(torch.zeros(3).to(self.device))  # Log variances for uncertainty
-        self.adapt_rate = 0.1  # Adaptation rate, can be tuned as a hyperparameter
+        
 
         # Initialize memory for storing historical losses
-        self.loss_history = {'main_loss': [], 'cl_loss': []}
+        
         self.epsilon = 1e-8  # For numerical stability
         # self.beta = 0.1  # Default value for weight adjustment
         
@@ -145,7 +145,7 @@ class lgn_tau_frame(nn.Module):
         self.generate_mode = args_config.generate_mode
         
         
-        self.InfoNCE = losses.InfoNCE()
+        self.InfoNCE = losses.InfoNCE_m()
         if args_config.loss_fn == "Adap_tau_Loss":
             print(self.loss_name)
             print("start to make tables")
@@ -168,22 +168,16 @@ class lgn_tau_frame(nn.Module):
         self.user_tower = nn.Sequential(
             nn.Linear(self.emb_size, 1024),
             nn.ReLU(True),
-            nn.Linear(1024, 128),
+            nn.Linear(1024, 64),
             nn.Tanh()
         )
         self.item_tower = nn.Sequential(
             nn.Linear(self.emb_size, 1024),
             nn.ReLU(True),
-            nn.Linear(1024, 128),
+            nn.Linear(1024, 64),
             nn.Tanh()
         )
-        # Task Prioritization Network
-        self.task_prior_net = nn.Sequential(
-            nn.Linear(3, 128),  # Assuming 3 tasks
-            nn.ReLU(),
-            nn.Linear(128, 3),
-            nn.Softmax(dim=0)
-        ).to(self.device)
+        
         self.dropout_rate = 0.1
         self.dropout = nn.Dropout(self.dropout_rate)
 
@@ -260,14 +254,14 @@ class lgn_tau_frame(nn.Module):
             x = x.detach()
             self.memory_tau_is = x
     
-    def _loss_to_tau(self, x, x_all):
+    def _loss_to_tau(self, x, x_all, memory_tau):
         if self.tau_mode == "weight_v0":
             t_0 = x_all
-            tau = t_0 * torch.ones_like(self.memory_tau, device=self.device)
+            tau = t_0 * torch.ones_like(memory_tau, device=self.device)
         elif self.tau_mode == "weight_ratio":
             t_0 = x_all
             if x is None:
-                tau = t_0 * torch.ones_like(self.memory_tau, device=self.device)
+                tau = t_0 * torch.ones_like(memory_tau, device=self.device)
             else:
                 base_laberw = torch.quantile(x, self.temperature)
                 laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
@@ -277,7 +271,7 @@ class lgn_tau_frame(nn.Module):
         elif self.tau_mode == "weight_mean":
             t_0 = x_all
             if x is None:
-                tau = t_0 * torch.ones_like(self.memory_tau, device=self.device)
+                tau = t_0 * torch.ones_like(memory_tau, device=self.device)
             else:
                 base_laberw = torch.mean(x)
                 laberw_data = torch.clamp((x - base_laberw) / self.temperature_2,
@@ -288,10 +282,10 @@ class lgn_tau_frame(nn.Module):
     
     def cal_cl_loss(self,user_view1,user_view2,item_view1,item_view2,temperature_u, temperature_i):
         
-        user_cl_loss, user_ = self.InfoNCE(user_view1, user_view2, temperature_u.unsqueeze(1))
-        item_cl_loss, item_ = self.InfoNCE(item_view1, item_view2, temperature_i.unsqueeze(1))
+        user_cl_loss, user_ = self.InfoNCE([user_view1, user_view2], temperature_u.unsqueeze(1))
+        item_cl_loss, item_ = self.InfoNCE([item_view1, item_view2], temperature_i.unsqueeze(1))
         
-        return user_cl_loss + item_cl_loss, user_, item_
+        return (user_cl_loss + item_cl_loss) * 1, user_, item_
     
 
 
@@ -300,6 +294,7 @@ class lgn_tau_frame(nn.Module):
         pos_item = batch['pos_items']
         if meta_loss_grad is not None:
             self.update_eps(meta_loss_grad)
+        
         user_gcn_emb, item_gcn_emb, cl_user_emb, cl_item_emb = self.gcn(self.user_embed,
                                               self.item_embed,
                                               edge_dropout=self.edge_dropout,
@@ -307,11 +302,11 @@ class lgn_tau_frame(nn.Module):
         # neg_item = batch['neg_items']  # [batch_size, n_negs * K]
         if s == 0 and w_0 is not None:
             # self.logger.info("Start to adjust tau with respect to users")
-            tau_user = self._loss_to_tau(loss_per_user, w_0)
-            tau_user_u = self._loss_to_tau(loss_per_user_u, w_0)
-            tau_user_i = self._loss_to_tau(loss_per_user_i, w_0)
-            tau_user_us = self._loss_to_tau(loss_per_user_us, w_0)
-            tau_user_is = self._loss_to_tau(loss_per_user_is, w_0)
+            tau_user = self._loss_to_tau(loss_per_user, w_0, self.memory_tau)
+            tau_user_u = self._loss_to_tau(loss_per_user_u, w_0, self.memory_tau_u)
+            tau_user_i = self._loss_to_tau(loss_per_user_i, w_0, self.memory_tau_i)
+            tau_user_us = self._loss_to_tau(loss_per_user_us, w_0, self.memory_tau_us)
+            tau_user_is = self._loss_to_tau(loss_per_user_is, w_0, self.memory_tau_is)
             self._update_tau_memory(tau_user)
             self._update_tau_memory_u(tau_user_u)
             self._update_tau_memory_i(tau_user_i)
@@ -366,19 +361,6 @@ class lgn_tau_frame(nn.Module):
     def rating(self, u_g_embeddings=None, i_g_embeddings=None):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
     
-    def update_task_prior_net(self, losses):
-        """
-        Update the task prioritization network.
-        """
-        self.task_prior_net.zero_grad()
-        task_weights = self.task_prior_net(losses)
-        weighted_loss = (task_weights[0] * losses[0] +
-                         task_weights[1] * losses[1] +
-                         task_weights[2] * losses[2])
-        weighted_loss.backward()
-        for param in self.task_prior_net.parameters():
-            param.grad.data.clamp_(-1, 1)  # Optional: Gradient clipping
-        self.optimizer.step()
 
     # 对比训练loss，仅仅计算角度
     def Uniform_loss(self, user_gcn_emb, pos_gcn_emb, neg_gcn_emb, user, w_0=None):
@@ -434,11 +416,13 @@ class lgn_tau_frame(nn.Module):
     
     def cal_cl_loss_Large_scale_Item(self, user, item, temperature_u, temperature_i):
         user_view_1, user_view_2 = self.user_encoding(user)
+        user_view_3, user_view_4 = self.user_encoding(user)
         item_view_1, item_view_2 = self.item_encoding(item)   
-        user_cl_loss, user_ = self.InfoNCE(user_view_1, user_view_2, temperature_u.unsqueeze(1))
-        item_cl_loss, item_ = self.InfoNCE(item_view_1, item_view_2, temperature_i.unsqueeze(1))
+        item_view_3, item_view_4 = self.item_encoding(item)   
+        user_cl_loss, user_ = self.InfoNCE([user_view_1, user_view_2,user_view_3, user_view_4], temperature_u.unsqueeze(1))
+        item_cl_loss, item_ = self.InfoNCE([item_view_1, item_view_2, item_view_3, item_view_4], temperature_i.unsqueeze(1))
         
-        cl_loss = user_cl_loss + item_cl_loss
+        cl_loss = (user_cl_loss + item_cl_loss) * 1
         
         return cl_loss, user_, item_
 
@@ -478,70 +462,30 @@ class lgn_tau_frame(nn.Module):
             https://ar5iv.labs.arxiv.org/html/1912.12355
             https://paperswithcode.com/paper/softadapt-techniques-for-adaptive-loss
             """
-#             with torch.no_grad():
-#                 # Store the current losses in history
-#                 self.loss_history['main_loss'].append(loss.mean().item())
-#                 self.loss_history['cl_loss'].append(cl_loss.item())
-#                 self.loss_history['emb_loss'].append(emb_loss.item())
-#                 # Keep history size manageable (e.g., last 100 values)
-#                 for key in self.loss_history:
-#                     if len(self.loss_history[key]) > 100:
-#                         self.loss_history[key].pop(0)
 
-#                 # Calculate rate of change and average of past losses
-#                 st = {
-#                     key: self.beta * (self.loss_history[key][-1] - self.loss_history[key][-2]) if len(self.loss_history[key]) > 1 else 0
-#                     for key in self.loss_history
-#                 }
-#                 ft = {
-#                     key: sum(self.loss_history[key]) / len(self.loss_history[key]) if self.loss_history[key] else 0
-#                     for key in self.loss_history
-#                 }
-
-#                 # Normalize and convert to tensors
-#                 st_tensor = torch.tensor(list(st.values()), device=self.device)
-#                 ft_tensor = torch.tensor(list(ft.values()), device=self.device)
-
-#                 # Normalization and adaptive weight adjustment
-#                 nsi = st_tensor / (st_tensor.sum() + self.epsilon)
-#                 alpha_i = torch.exp(nsi) / (torch.exp(nsi).sum() + self.epsilon)
-
-#                 # Adjust weights using SoftAdapt
-#                 if 'Loss Weighted' in self.variants:
-#                     alpha_i = ft_tensor * alpha_i / (ft_tensor.sum() * alpha_i.sum() + self.epsilon)
-
-#                 self.loss_weights = alpha_i
-
-#             weighted_loss = (self.loss_weights[0] * loss.mean() +
-#                              self.loss_weights[1] * cl_loss +
-#                              self.loss_weights[2] * emb_loss)
-                
-            # Combine all task losses into a tensor
-        
             """
             Multi-task Network Embedding with AdaptiveLoss Weighting
             https://dl.acm.org/doi/epdf/10.1109/ASONAM49781.2020.9381423
             """
             current_losses = torch.tensor([loss.mean().item(), cl_loss.item(), cl_loss_s.item()], device=self.device)
 
-            # if self.initial_losses is None:
-            #     # Initialize initial_losses on the first iteration
-            #     self.initial_losses = current_losses.clone()
+            if self.initial_losses is None:
+                # Initialize initial_losses on the first iteration
+                self.initial_losses = current_losses.clone()
 
-#             # Compute task difficulties
-#             task_difficulties = current_losses / (self.initial_losses + self.epsilon)
+            # Compute task difficulties
+            task_difficulties = current_losses / (self.initial_losses + self.epsilon)
 
-#             # Update task weights based on difficulties
-#             exp_difficulties = torch.exp(task_difficulties)
-#             self.task_weights = exp_difficulties / (exp_difficulties.sum() + self.epsilon)
+            # Update task weights based on difficulties
+            exp_difficulties = torch.exp(task_difficulties)
+            self.task_weights = exp_difficulties / (exp_difficulties.sum() + self.epsilon)
             
-            # Dynamic task prioritization using the prioritization network
-            task_weights = self.task_prior_net(current_losses)
+            
 
             # Compute final weighted loss
-            weighted_loss = (task_weights[0] * loss.mean() +
-                             task_weights[1] * cl_loss +
-                             task_weights[2] * cl_loss_s)
+            weighted_loss = (self.task_weights[0] * loss.mean() +
+                             self.task_weights[1] * cl_loss +
+                             self.task_weights[2] * cl_loss_s)
 
             # # Compute final weighted loss
             # weighted_loss = (combined_weights[0] * loss.mean() +
@@ -549,7 +493,7 @@ class lgn_tau_frame(nn.Module):
             #                  combined_weights[2] * cl_loss_s)
             
             
-            return weighted_loss + emb_loss, loss_, emb_loss, tau, cl_loss,cl_loss_u,cl_loss_i, cl_loss_us, cl_loss_is, current_losses
+            return weighted_loss + emb_loss, loss_, emb_loss, tau, cl_loss,cl_loss_u,cl_loss_i, cl_loss_us, cl_loss_is
         elif self.loss_name == "SSM_Loss":
             loss, loss_ = self.loss_fn(y_pred)
             return loss.mean() + emb_loss, loss_, emb_loss, y_pred

@@ -255,6 +255,192 @@ class L2Loss(nn.Module):
 #         hard_neg_weights[hard_negatives] = hard_neg_scores
 #         return hard_neg_weights
 
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+
+# class InfoNCE(nn.Module):
+#     def __init__(self):
+#         super(InfoNCE, self).__init__()
+        
+
+#     def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
+#         """
+#         Args:
+#             views: List of (torch.Tensor - N x D) multiple views
+#             temperature: float
+#             b_cos: bool
+#             ohem: bool
+
+#         Return: Average InfoNCE Loss with and without temperature scaling
+#         """
+#         # Use the provided temperature or the learnable parameter
+       
+
+#         # Normalize views if b_cos is True
+#         if b_cos:
+#             views = [F.normalize(view, dim=1) for view in views]
+
+#         # Extract multi-scale features
+#         #views = self.multi_scale_features(views)
+
+#         # Initialize the memory bank dynamically based on view dimensions
+        
+
+        
+
+#         # Create the attention layer dynamically based on input dimension
+#         self.attention_layer = nn.Sequential(
+#             nn.Linear(64, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, 1),
+#             nn.Tanh()
+#         ).to(views[0].device)  # Ensure it is on the same device as the views
+
+#         # Get the number of views
+#         num_views = len(views)
+        
+#         # Compute scores for each pair of views
+#         all_scores = []
+#         for i in range(num_views):
+#             for j in range(i + 1, num_views):
+#                 score = (views[i] @ views[j].T) / temperature
+#                 all_scores.append(score)
+        
+#         # Combine all scores
+#         all_scores = torch.cat(all_scores, dim=1)
+
+#         # Calculate positive scores
+#         pos_scores = torch.diag(torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1))
+
+#         if ohem:
+#             # Online hard example mining
+#             hard_neg_weights = self.ohem(all_scores, margin=0.2)
+#             all_scores = all_scores * hard_neg_weights
+        
+#         # Calculate loss with temperature scaling
+#         loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
+
+#         # Calculate loss without temperature scaling
+#         all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
+#         loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
+
+#         # Attention Mechanism for View Importance
+#         attention_weights = torch.cat([self.attention_layer(view) for view in views], dim=0)
+#         attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
+#         views = [view * attention_weights[i] for i, view in enumerate(views)]
+
+#         # Momentum Contrastive Learning
+        
+
+#         # Contrastive Cross-View Consistency Regularization
+#         consistency_loss = 0.0
+#         for i in range(num_views):
+#             for j in range(i + 1, num_views):
+#                 consistency_loss += F.mse_loss(views[i], views[j])
+#         loss_with_temp += consistency_loss
+
+#         return loss_with_temp, loss_without_temp
+
+#     def ohem(self, scores, margin):
+#         """
+#         Online Hard Example Mining function
+#         Args:
+#             scores: Scores matrix of all positive and negative examples
+#             margin: Margin for online hard example mining
+#         """
+#         positive_scores = torch.diag(scores)
+#         hard_negatives = scores - positive_scores.unsqueeze(1) > margin
+#         hard_neg_scores = scores[hard_negatives]
+#         hard_neg_weights = torch.ones_like(scores)
+#         hard_neg_weights[hard_negatives] = hard_neg_scores
+#         return hard_neg_weights
+
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+
+# class InfoNCE(nn.Module):
+#     def __init__(self):
+#         super(InfoNCE, self).__init__()
+#         self.memory_bank = None  # Placeholder for memory bank
+
+#     def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
+#         """
+#         Args:
+#             views: List of (torch.Tensor - N x D) multiple views
+#             temperature: float
+#             b_cos: bool
+#             ohem: bool
+
+#         Return: Average InfoNCE Loss with and without temperature scaling
+#         """
+#         if b_cos:
+#             views = [F.normalize(view, dim=1) for view in views]
+
+#         self.attention_layer = nn.Sequential(
+#             nn.Linear(64, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, 1),
+#             nn.Tanh()
+#         ).to(views[0].device)
+
+#         num_views = len(views)
+        
+#         all_scores = []
+#         for i in range(num_views):
+#             for j in range(i + 1, num_views):
+#                 score = (views[i] @ views[j].T) / temperature
+#                 all_scores.append(score)
+        
+#         all_scores = torch.cat(all_scores, dim=1)
+
+#         pos_scores = torch.diag(torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1))
+
+#         if ohem:
+#             hard_neg_weights = self.ohem(all_scores, pos_scores, margin=0.2)
+#             all_scores = all_scores * hard_neg_weights
+        
+#         loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
+
+#         all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
+#         loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
+
+#         attention_weights = torch.cat([self.attention_layer(view) for view in views], dim=0)
+#         attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
+#         views = [view * attention_weights[i] for i, view in enumerate(views)]
+
+#         consistency_loss = 0.0
+#         for i in range(num_views):
+#             for j in range(i + 1, num_views):
+#                 consistency_loss += F.mse_loss(views[i], views[j])
+#         loss_with_temp += consistency_loss
+
+#         return loss_with_temp, loss_without_temp
+
+#     def ohem(self, scores, pos_scores, margin):
+#         """
+#         Online Hard Example Mining function
+#         Args:
+#             scores: Scores matrix of all positive and negative examples
+#             pos_scores: Positive scores for the examples
+#             margin: Margin for online hard example mining
+#         """
+#         # Compute adaptive margin based on the distribution of positive scores
+#         adaptive_margin = margin * torch.std(pos_scores).item()
+
+#         positive_scores = torch.diag(scores)
+#         hard_negatives = scores - positive_scores.unsqueeze(1) > adaptive_margin
+#         hard_neg_scores = scores[hard_negatives]
+        
+#         # Use a more sophisticated weighting strategy
+#         hard_neg_weights = torch.ones_like(scores)
+#         if hard_neg_scores.numel() > 0:
+#             weights = 1 + torch.sigmoid(hard_neg_scores - adaptive_margin)
+#             hard_neg_weights[hard_negatives] = weights
+        
+#         return hard_neg_weights
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -262,69 +448,54 @@ import torch.nn.functional as F
 class InfoNCE(nn.Module):
     def __init__(self):
         super(InfoNCE, self).__init__()
+        self.memory_bank = None  # Placeholder for memory bank
+        self.global_step = 0
 
-    def forward(self, views, temperature: float, b_cos: bool = True, ohem: bool = True, step: int = 0, alpha: float = 0.01, balance_factor: float = 0.5):
+    def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
         """
         Args:
             views: List of (torch.Tensor - N x D) multiple views
             temperature: float
             b_cos: bool
             ohem: bool
-            step: int - current training step for dynamic margin adjustment
-            alpha: float - factor for margin adjustment
-            balance_factor: float - factor for balancing hard and easy samples
 
         Return: Average InfoNCE Loss with and without temperature scaling
         """
-        # Extract multi-scale features
-        views = self.multi_scale_features(views)
-        
-        # Normalize views if b_cos is True
         if b_cos:
             views = [F.normalize(view, dim=1) for view in views]
 
-        # Create the attention layer dynamically based on input dimension
         self.attention_layer = nn.Sequential(
-            nn.Linear(views[0].shape[1], 256),  # Adjust input dimension dynamically
+            nn.Linear(64, 128),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(128, 1),
             nn.Tanh()
-        ).to(views[0].device)  # Ensure it is on the same device as the views
+        ).to(views[0].device)
 
-        # Get the number of views
         num_views = len(views)
         
-        # Compute scores for each pair of views
         all_scores = []
         for i in range(num_views):
             for j in range(i + 1, num_views):
                 score = (views[i] @ views[j].T) / temperature
                 all_scores.append(score)
         
-        # Combine all scores
         all_scores = torch.cat(all_scores, dim=1)
 
-        # Calculate positive scores
         pos_scores = torch.diag(torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1))
 
         if ohem:
-            # Online hard example mining with dynamic margin adjustment and balancing
-            hard_neg_weights = self.ohem(all_scores, initial_margin=0.2, alpha=alpha, step=step, balance_factor=balance_factor)
+            hard_neg_weights = self.ohem(all_scores, pos_scores, margin=0.2)
             all_scores = all_scores * hard_neg_weights
         
-        # Calculate loss with temperature scaling
         loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
 
-        # Calculate loss without temperature scaling
         all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
         loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
 
-        # Attention Mechanism for View Importance
         attention_weights = torch.cat([self.attention_layer(view) for view in views], dim=0)
         attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
         views = [view * attention_weights[i] for i, view in enumerate(views)]
 
-        # Contrastive Cross-View Consistency Regularization
         consistency_loss = 0.0
         for i in range(num_views):
             for j in range(i + 1, num_views):
@@ -333,43 +504,104 @@ class InfoNCE(nn.Module):
 
         return loss_with_temp, loss_without_temp
 
-    def ohem(self, scores, initial_margin, alpha, step, balance_factor):
+    def ohem(self, scores, pos_scores, margin):
         """
-        Dynamic Online Hard Example Mining function
+        Online Hard Example Mining function
         Args:
             scores: Scores matrix of all positive and negative examples
-            initial_margin: Initial margin for online hard example mining
-            alpha: Factor for margin adjustment
-            step: Current training step
-            balance_factor: Factor for balancing hard and easy samples
+            pos_scores: Positive scores for the examples
+            margin: Margin for online hard example mining
         """
-        margin = initial_margin * (1 + alpha * step)
+        # Compute adaptive margin based on the distribution of positive scores
+        adaptive_margin = margin * torch.std(pos_scores).item()
+
         positive_scores = torch.diag(scores)
-        hard_negatives = scores - positive_scores.unsqueeze(1) > margin
-        easy_negatives = scores - positive_scores.unsqueeze(1) < margin / 2  # Example easy margin
-
+        hard_negatives = scores - positive_scores.unsqueeze(1) > adaptive_margin
         hard_neg_scores = scores[hard_negatives]
-        easy_neg_scores = scores[easy_negatives]
-
-        hard_neg_weights = torch.ones_like(scores)
-        easy_neg_weights = torch.ones_like(scores)
-
-        hard_neg_weights[hard_negatives] = hard_neg_scores
-        easy_neg_weights[easy_negatives] = easy_neg_scores
-
-        weights = hard_neg_weights * balance_factor + easy_neg_weights * (1 - balance_factor)
         
-        return weights
+        # Use a more sophisticated weighting strategy
+        hard_neg_weights = torch.ones_like(scores)
+        if hard_neg_scores.numel() > 0:
+            weights = 1 + torch.sigmoid(hard_neg_scores - adaptive_margin)
+            hard_neg_weights[hard_negatives] = weights
+        
+        # Dynamic Weight Scaling: Scale weights based on global step
+        scaling_factor = min(1.0, self.global_step / 10000.0)
+        hard_neg_weights *= scaling_factor
+        
+        # Class-Balanced Sampling: Ensure balanced sampling across classes
+        non_zero_indices = hard_neg_weights.nonzero(as_tuple=True)
+        if non_zero_indices[0].numel() > 0:
+            class_counts = torch.bincount(non_zero_indices[1])
+            class_weights = 1.0 / (class_counts.float() + 1e-5)
+            hard_neg_weights[non_zero_indices] *= class_weights[non_zero_indices[1]].view_as(hard_neg_weights[non_zero_indices])
+        
+        # Update global step
+        self.global_step += 1
+        
+        return hard_neg_weights
 
-    def multi_scale_features(self, views):
-        """
-        Extract multi-scale features
-        """
-        multi_scale_views = []
-        for view in views:
-            # Assuming the input view is 4D: (N, C, H, W)
-            scale1 = F.adaptive_avg_pool2d(view, (8, 8)).view(view.size(0), -1)  # Flatten
-            scale2 = F.adaptive_avg_pool2d(view, (16, 16)).view(view.size(0), -1)  # Flatten
-            scale3 = F.adaptive_avg_pool2d(view, (32, 32)).view(view.size(0), -1)  # Flatten
-            multi_scale_views.append(torch.cat([scale1, scale2, scale3], dim=1))
-        return multi_scale_views
+
+class InfoNCE_m(nn.Module):
+    def __init__(self, temperature: float = 0.07, memory_bank_size: int = 10000, embed_dim: int = 64):
+        super(InfoNCE_m, self).__init__()
+        self.memory_bank = torch.randn(memory_bank_size, embed_dim)  # Memory bank for negative samples
+        self.memory_bank = F.normalize(self.memory_bank, dim=1)
+        
+
+        # Multi-head attention mechanism
+        self.attention_layer = nn.MultiheadAttention(embed_dim, num_heads=8).to('cuda:0')
+
+    def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
+        if b_cos:
+            views = [F.normalize(view, dim=1) for view in views]
+
+        num_views = len(views)
+        
+        all_scores = []
+        for i in range(num_views):
+            for j in range(i + 1, num_views):
+                score = (views[i] @ views[j].T) / temperature
+                all_scores.append(score)
+        
+        all_scores = torch.cat(all_scores, dim=1)
+
+        pos_scores = torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1)
+        pos_scores = torch.diag(pos_scores)
+
+        if ohem:
+            hard_neg_weights = self.ohem(all_scores, pos_scores, margin=0.2)
+            all_scores = all_scores * hard_neg_weights
+        
+        loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
+
+        all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
+        loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
+
+        # Attention mechanism
+        views_concat = torch.cat(views, dim=0).unsqueeze(1)
+        attention_output, _ = self.attention_layer(views_concat, views_concat, views_concat)
+        attention_weights = torch.mean(attention_output, dim=1)
+        attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
+        views = [view * attention_weights[i] for i, view in enumerate(views)]
+
+        consistency_loss = 0.0
+        for i in range(num_views):
+            for j in range(i + 1, num_views):
+                consistency_loss += F.mse_loss(views[i], views[j])
+        loss_with_temp += consistency_loss
+
+        return loss_with_temp, loss_without_temp
+
+    def ohem(self, scores, pos_scores, margin):
+        adaptive_margin = margin * torch.std(pos_scores).item()
+        positive_scores = torch.diag(scores)
+        hard_negatives = scores - positive_scores.unsqueeze(1) > adaptive_margin
+        hard_neg_scores = scores[hard_negatives]
+        
+        hard_neg_weights = torch.ones_like(scores)
+        if hard_neg_scores.numel() > 0:
+            weights = 1 + torch.sigmoid(hard_neg_scores - adaptive_margin)
+            hard_neg_weights[hard_negatives] = weights
+        
+        return hard_neg_weights
