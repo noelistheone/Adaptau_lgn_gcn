@@ -29,6 +29,41 @@ class Adap_tau_Loss(nn.Module):
         loss_ = (- torch.log(pos_logits_ / Ng_)).detach()
         return loss, loss_
 
+class EnhancedContrastiveLoss(nn.Module):
+    def __init__(self):
+        super(EnhancedContrastiveLoss, self).__init__()
+
+    def forward(self, y_pred, temperature_, w_0):
+        """
+        :param y_pred: Predicted scores
+        :param temperature_: Temperature parameter for scaling
+        :param w_0: Scaling factor
+        :return: Enhanced contrastive loss
+        """
+        # Positive logits
+        pos_logits = y_pred[:, 0] * w_0  # B
+        
+        # Negative logits
+        neg_logits = y_pred[:, 1:] * temperature_.unsqueeze(1)  # B M
+        
+        # Calculate the log-sum-exp for numerical stability
+        max_neg_logits, _ = torch.max(neg_logits, dim=1, keepdim=True)
+        stable_neg_logits = neg_logits - max_neg_logits
+        exp_sum = torch.exp(stable_neg_logits).sum(dim=1)
+        
+        # Calculate the loss
+        loss = - pos_logits + torch.log(exp_sum + torch.exp(-max_neg_logits.squeeze()))
+        
+        # Log out (detached version for monitoring)
+        pos_logits_ = y_pred[:, 0]  # B
+        neg_logits_ = y_pred[:, 1:]  # B M
+        max_neg_logits_, _ = torch.max(neg_logits_, dim=1, keepdim=True)
+        stable_neg_logits_ = neg_logits_ - max_neg_logits_
+        exp_sum_ = torch.exp(stable_neg_logits_).sum(dim=1)
+        loss_ = - pos_logits_ + torch.log(exp_sum_ + torch.exp(-max_neg_logits_.squeeze()))
+        
+        return loss.mean(), loss_.detach()
+    
 class SSM_Loss(nn.Module):
     def __init__(self, margin=0, temperature=1.0, negative_weight=None, pos_mode=None):
         super(SSM_Loss, self).__init__()
@@ -363,7 +398,7 @@ class L2Loss(nn.Module):
 # class InfoNCE(nn.Module):
 #     def __init__(self):
 #         super(InfoNCE, self).__init__()
-#         self.memory_bank = None  # Placeholder for memory bank
+        
 
 #     def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
 #         """
@@ -379,9 +414,9 @@ class L2Loss(nn.Module):
 #             views = [F.normalize(view, dim=1) for view in views]
 
 #         self.attention_layer = nn.Sequential(
-#             nn.Linear(64, 128),
+#             nn.Linear(64, 256),
 #             nn.ReLU(),
-#             nn.Linear(128, 1),
+#             nn.Linear(256, 1),
 #             nn.Tanh()
 #         ).to(views[0].device)
 
@@ -441,17 +476,11 @@ class L2Loss(nn.Module):
         
 #         return hard_neg_weights
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class InfoNCE(nn.Module):
     def __init__(self):
         super(InfoNCE, self).__init__()
-        self.memory_bank = None  # Placeholder for memory bank
-        self.global_step = 0
 
-    def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
+    def forward(self, views, temperature, b_cos: bool = True, ohem: bool = True):
         """
         Args:
             views: List of (torch.Tensor - N x D) multiple views
@@ -464,43 +493,35 @@ class InfoNCE(nn.Module):
         if b_cos:
             views = [F.normalize(view, dim=1) for view in views]
 
-        self.attention_layer = nn.Sequential(
-            nn.Linear(64, 128),
-            nn.ReLU(),
-            nn.Linear(128, 1),
-            nn.Tanh()
-        ).to(views[0].device)
-
         num_views = len(views)
         
+        # Symmetric InfoNCE
         all_scores = []
+        all_scores_rev = []
         for i in range(num_views):
             for j in range(i + 1, num_views):
                 score = (views[i] @ views[j].T) / temperature
+                score_rev = (views[j] @ views[i].T) / temperature
                 all_scores.append(score)
+                all_scores_rev.append(score_rev)
         
         all_scores = torch.cat(all_scores, dim=1)
-
+        all_scores_rev = torch.cat(all_scores_rev, dim=1)
+        
         pos_scores = torch.diag(torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1))
 
         if ohem:
             hard_neg_weights = self.ohem(all_scores, pos_scores, margin=0.2)
             all_scores = all_scores * hard_neg_weights
+            hard_neg_weights_rev = self.ohem(all_scores_rev, pos_scores, margin=0.2)
+            all_scores_rev = all_scores_rev * hard_neg_weights_rev
         
         loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
+        loss_with_temp_rev = -torch.diag(F.log_softmax(all_scores_rev, dim=1)).mean()
+        loss_with_temp = (loss_with_temp + loss_with_temp_rev) / 2  # Symmetric loss
 
         all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
         loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
-
-        attention_weights = torch.cat([self.attention_layer(view) for view in views], dim=0)
-        attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
-        views = [view * attention_weights[i] for i, view in enumerate(views)]
-
-        consistency_loss = 0.0
-        for i in range(num_views):
-            for j in range(i + 1, num_views):
-                consistency_loss += F.mse_loss(views[i], views[j])
-        loss_with_temp += consistency_loss
 
         return loss_with_temp, loss_without_temp
 
@@ -512,96 +533,109 @@ class InfoNCE(nn.Module):
             pos_scores: Positive scores for the examples
             margin: Margin for online hard example mining
         """
-        # Compute adaptive margin based on the distribution of positive scores
         adaptive_margin = margin * torch.std(pos_scores).item()
-
         positive_scores = torch.diag(scores)
         hard_negatives = scores - positive_scores.unsqueeze(1) > adaptive_margin
         hard_neg_scores = scores[hard_negatives]
-        
-        # Use a more sophisticated weighting strategy
         hard_neg_weights = torch.ones_like(scores)
         if hard_neg_scores.numel() > 0:
             weights = 1 + torch.sigmoid(hard_neg_scores - adaptive_margin)
             hard_neg_weights[hard_negatives] = weights
-        
-        # Dynamic Weight Scaling: Scale weights based on global step
-        scaling_factor = min(1.0, self.global_step / 10000.0)
-        hard_neg_weights *= scaling_factor
-        
-        # Class-Balanced Sampling: Ensure balanced sampling across classes
-        non_zero_indices = hard_neg_weights.nonzero(as_tuple=True)
-        if non_zero_indices[0].numel() > 0:
-            class_counts = torch.bincount(non_zero_indices[1])
-            class_weights = 1.0 / (class_counts.float() + 1e-5)
-            hard_neg_weights[non_zero_indices] *= class_weights[non_zero_indices[1]].view_as(hard_neg_weights[non_zero_indices])
-        
-        # Update global step
-        self.global_step += 1
-        
         return hard_neg_weights
-
-
-class InfoNCE_m(nn.Module):
-    def __init__(self, temperature: float = 0.07, memory_bank_size: int = 10000, embed_dim: int = 64):
-        super(InfoNCE_m, self).__init__()
-        self.memory_bank = torch.randn(memory_bank_size, embed_dim)  # Memory bank for negative samples
-        self.memory_bank = F.normalize(self.memory_bank, dim=1)
+    
+# class DualContrastiveLoss(torch.nn.Module):
+#     def __init__(self):
+#         super(DualContrastiveLoss, self).__init__()
         
 
-        # Multi-head attention mechanism
-        self.attention_layer = nn.MultiheadAttention(embed_dim, num_heads=8).to('cuda:0')
+#     def forward(self, user_emb, pos_emb, temperature):
+#         batch_size = user_emb.size(0)
+#         # 计算相似度矩阵
+#         sim_matrix = torch.matmul(user_emb, pos_emb.T) / temperature
+#         # 取对角线元素作为正样本相似度
+#         pos_sim = torch.diag(sim_matrix)
+#         # 对比学习损失
+#         labels = torch.arange(batch_size).cuda()
+#         loss = F.cross_entropy(sim_matrix, labels)
+#         return loss
 
-    def forward(self, views, temperature: float = None, b_cos: bool = True, ohem: bool = True):
+
+    
+class InfoNCE_m(nn.Module):
+    def __init__(self):
+        super(InfoNCE_m, self).__init__()
+        self.momentum_encoder = nn.Sequential(
+            nn.Linear(64, 256),
+            nn.ReLU(),
+            nn.Linear(256, 64)
+        )
+        self.momentum = 0.999
+
+    def forward(self, views, temperature, b_cos: bool = True, ohem: bool = True):
+        """
+        Args:
+            views: List of (torch.Tensor - N x D) multiple views
+            temperature: float
+            b_cos: bool
+            ohem: bool
+
+        Return: Average InfoNCE Loss with and without temperature scaling
+        """
         if b_cos:
             views = [F.normalize(view, dim=1) for view in views]
 
         num_views = len(views)
         
+        # Momentum Contrast (MoCo)
+        with torch.no_grad():
+            momentum_views = [self.momentum_encoder(view) for view in views]
+            for param_q, param_k in zip(views, momentum_views):
+                param_k.data = param_k.data * self.momentum + param_q.data * (1. - self.momentum)
+        
+        # Symmetric InfoNCE
         all_scores = []
+        all_scores_rev = []
         for i in range(num_views):
             for j in range(i + 1, num_views):
                 score = (views[i] @ views[j].T) / temperature
+                score_rev = (momentum_views[j] @ momentum_views[i].T) / temperature
                 all_scores.append(score)
+                all_scores_rev.append(score_rev)
         
         all_scores = torch.cat(all_scores, dim=1)
-
-        pos_scores = torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1)
-        pos_scores = torch.diag(pos_scores)
+        all_scores_rev = torch.cat(all_scores_rev, dim=1)
+        
+        pos_scores = torch.diag(torch.cat([(views[i] @ views[i].T) / temperature for i in range(num_views)], dim=1))
 
         if ohem:
             hard_neg_weights = self.ohem(all_scores, pos_scores, margin=0.2)
+            hard_neg_weights_rev = self.ohem(all_scores_rev, pos_scores, margin=0.2)
             all_scores = all_scores * hard_neg_weights
+            all_scores_rev = all_scores_rev * hard_neg_weights_rev
         
         loss_with_temp = -torch.diag(F.log_softmax(all_scores, dim=1)).mean()
+        loss_with_temp_rev = -torch.diag(F.log_softmax(all_scores_rev, dim=1)).mean()
+        loss_with_temp = (loss_with_temp + loss_with_temp_rev) / 2  # Symmetric loss
 
         all_scores_no_temp = torch.cat([(views[i] @ views[j].T) for i in range(num_views) for j in range(i + 1, num_views)], dim=1)
         loss_without_temp = -torch.diag(F.log_softmax(all_scores_no_temp, dim=1)).detach()
 
-        # Attention mechanism
-        views_concat = torch.cat(views, dim=0).unsqueeze(1)
-        attention_output, _ = self.attention_layer(views_concat, views_concat, views_concat)
-        attention_weights = torch.mean(attention_output, dim=1)
-        attention_weights = F.softmax(attention_weights, dim=0).view(-1, 1)
-        views = [view * attention_weights[i] for i, view in enumerate(views)]
-
-        consistency_loss = 0.0
-        for i in range(num_views):
-            for j in range(i + 1, num_views):
-                consistency_loss += F.mse_loss(views[i], views[j])
-        loss_with_temp += consistency_loss
-
         return loss_with_temp, loss_without_temp
 
     def ohem(self, scores, pos_scores, margin):
+        """
+        Online Hard Example Mining function
+        Args:
+            scores: Scores matrix of all positive and negative examples
+            pos_scores: Positive scores for the examples
+            margin: Margin for online hard example mining
+        """
         adaptive_margin = margin * torch.std(pos_scores).item()
         positive_scores = torch.diag(scores)
         hard_negatives = scores - positive_scores.unsqueeze(1) > adaptive_margin
         hard_neg_scores = scores[hard_negatives]
-        
         hard_neg_weights = torch.ones_like(scores)
         if hard_neg_scores.numel() > 0:
             weights = 1 + torch.sigmoid(hard_neg_scores - adaptive_margin)
             hard_neg_weights[hard_negatives] = weights
-        
         return hard_neg_weights
